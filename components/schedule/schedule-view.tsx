@@ -3,10 +3,16 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
-import { format, addDays, startOfWeek, parseISO, isSameDay } from 'date-fns';
+import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History } from 'lucide-react';
+import { format, addDays, startOfWeek, parseISO, isSameDay, isWithinInterval } from 'date-fns';
 import { de } from 'date-fns/locale';
 import Link from 'next/link';
+
+const typeLabels = {
+  vacation: { label: 'Urlaub', icon: Plane, color: 'bg-orange-50 border-orange-200 text-orange-800 hover:bg-orange-100' },
+  sick: { label: 'Krank', icon: HeartPulse, color: 'bg-red-50 border-red-200 text-red-800 hover:bg-red-100' },
+  comp_time: { label: 'ZA', icon: History, color: 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100' }
+};
 
 export function ScheduleView() {
   const queryClient = useQueryClient();
@@ -16,6 +22,7 @@ export function ScheduleView() {
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: assignments } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
+  const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: api.getAbsences });
 
   const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 5 }).map((_, i) => addDays(startOfCurrentWeek, i));
@@ -74,8 +81,32 @@ export function ScheduleView() {
                 </div>
                 {days.map(day => {
                   const dayAssignments = assignments?.filter(a => a.userId === user.id && isSameDay(parseISO(a.date), day)) || [];
+                  
+                  const dayAbsences = absences?.filter(a => {
+                    if (a.userId !== user.id || a.status !== 'approved') return false;
+                    const start = parseISO(a.startDate);
+                    const end = parseISO(a.endDate);
+                    return isWithinInterval(day, { start, end });
+                  }) || [];
+
                   return (
                     <div key={day.toISOString()} className="p-2 border-r border-gray-200 relative min-h-[100px]">
+                      {/* Zeige Abwesenheiten */}
+                      {dayAbsences.map(abs => {
+                        const style = typeLabels[abs.type as keyof typeof typeLabels] || typeLabels.vacation;
+                        const Icon = style.icon;
+                        return (
+                          <div 
+                            key={abs.id}
+                            className={`flex items-center gap-1.5 rounded p-2 mb-2 text-xs font-bold border ${style.color} shadow-sm transition-colors`}
+                          >
+                            <Icon className="w-3.5 h-3.5" />
+                            <span>{style.label}</span>
+                          </div>
+                        );
+                      })}
+
+                      {/* Zeige Zuweisungen */}
                       {dayAssignments.map(asg => {
                         const project = projects?.find(p => p.id === asg.projectId);
                         return (
@@ -167,7 +198,7 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Bis (Uhrzeit)</label>
-                  <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                  <input type="time" value={endTime} onChange={e => setTargetHours(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                 </div>
               </div>
 
