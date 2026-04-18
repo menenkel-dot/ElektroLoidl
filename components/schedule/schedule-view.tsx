@@ -198,7 +198,7 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Bis (Uhrzeit)</label>
-                  <input type="time" value={endTime} onChange={e => setTargetHours(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                  <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                 </div>
               </div>
 

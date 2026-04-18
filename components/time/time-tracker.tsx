@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Plus } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
 export function TimeTracker() {
   const queryClient = useQueryClient();
@@ -48,7 +49,7 @@ export function TimeTracker() {
                   <div className="flex flex-col gap-2 sm:gap-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-gray-900">{entry.description}</p>
-                      {currentUser?.role === 'admin' && user && (
+                      {user && (
                         <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase">
                           {user.name}
                         </span>
@@ -77,6 +78,9 @@ export function TimeTracker() {
             );
           })}
         </ul>
+        {(!entries || entries.length === 0) && (
+          <div className="p-12 text-center text-slate-500 italic">Keine Einträge vorhanden.</div>
+        )}
       </div>
 
       {isModalOpen && (
@@ -104,11 +108,22 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
   const [endTime, setEndTime] = useState('16:00');
   const [description, setDescription] = useState('');
 
+  // Sync userId if currentUser loads after modal open
+  useEffect(() => {
+    if (currentUser?.id && !targetUserId) {
+      setTargetUserId(currentUser.id);
+    }
+  }, [currentUser, targetUserId]);
+
   const addMutation = useMutation({
     mutationFn: api.addTimeEntry,
     onSuccess: () => {
+      toast.success('Zeiteintrag erfolgreich gespeichert');
       onSuccess();
       onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler beim Speichern: ' + error.message);
     }
   });
 
@@ -117,13 +132,25 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!targetUserId) {
+      toast.error('Bitte wählen Sie einen Mitarbeiter aus.');
+      return;
+    }
+
     const start = new Date(`1970-01-01T${startTime}:00`);
     const end = new Date(`1970-01-01T${endTime}:00`);
+    
+    if (end <= start) {
+      toast.error('Die Endzeit muss nach der Startzeit liegen.');
+      return;
+    }
+
     let diff = (end.getTime() - start.getTime()) / 60000;
     
-    // Auto deduction for >6h
+    // Automatische Pausenabzug bei > 6h
     if (diff > 360) {
-        diff -= 30; // 30 min pause
+        diff -= 30;
     }
 
     addMutation.mutate({
@@ -142,18 +169,20 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
   const isAdmin = currentUser?.role === 'admin';
 
   return (
-    <div className="relative z-50" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose}></div>
+    <div className="relative z-50">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}></div>
       <div className="fixed inset-0 z-10 overflow-y-auto">
-        <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-          <div className="relative transform overflow-hidden rounded-xl bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-            <h3 className="text-lg font-semibold leading-6 text-gray-900" id="modal-title">Zeiteintrag erstellen</h3>
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+            <div className="px-6 py-4 border-b border-slate-100">
+               <h3 className="text-lg font-bold text-slate-900">Zeiteintrag erstellen</h3>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
               
               {isAdmin && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Mitarbeiter</label>
-                  <select required value={targetUserId} onChange={e => setTargetUserId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label>
+                  <select required value={targetUserId} onChange={e => setTargetUserId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
                     <option value="">Bitte wählen...</option>
                     {users.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
@@ -161,56 +190,56 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Kunde</label>
-                <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); setServiceId(''); }} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Kunde</label>
+                <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
                   <option value="">Bitte wählen...</option>
                   {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Projekt</label>
-                <select required disabled={!clientId} value={projectId} onChange={e => { setProjectId(e.target.value); setServiceId(''); }} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Auftrag</label>
+                <select required disabled={!clientId} value={projectId} onChange={e => { setProjectId(e.target.value); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
                   <option value="">Bitte wählen...</option>
                   {availableProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Leistung (optional)</label>
-                <select disabled={!projectId} value={serviceId} onChange={e => setServiceId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
-                  <option value="">Ohne Leistung...</option>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Leistung (optional)</label>
+                <select disabled={!projectId} value={serviceId} onChange={e => setServiceId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
+                  <option value="">Keine spezielle Leistung</option>
                   {availableServices.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Datum</label>
-                  <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Datum</label>
+                  <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                 </div>
                 <div className="grid grid-cols-2 gap-4 sm:col-span-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Von</label>
-                    <input type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Von</label>
+                    <input type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Bis</label>
-                    <input type="time" required value={endTime} onChange={e => setEndTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Bis</label>
+                    <input type="time" required value={endTime} onChange={e => setEndTime(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Beschreibung</label>
-                <textarea required rows={2} value={description} onChange={e => setDescription(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Beschreibung</label>
+                <textarea required rows={2} value={description} onChange={e => setDescription(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" placeholder="Was wurde erledigt?" />
               </div>
 
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
-                <button type="submit" disabled={addMutation.isPending} className="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:col-start-2 disabled:opacity-50">
+              <div className="pt-4 flex gap-3">
+                <button type="submit" disabled={addMutation.isPending} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
                   {addMutation.isPending ? 'Speichert...' : 'Speichern'}
                 </button>
-                <button type="button" onClick={onClose} className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:col-start-1 sm:mt-0">
+                <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
                   Abbrechen
                 </button>
               </div>
