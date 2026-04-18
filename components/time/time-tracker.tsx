@@ -91,7 +91,11 @@ export function TimeTracker() {
           services={services || []}
           users={users || []}
           currentUser={currentUser}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['timeEntries'] })}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            queryClient.invalidateQueries({ queryKey: ['project'] });
+          }}
         />
       )}
     </div>
