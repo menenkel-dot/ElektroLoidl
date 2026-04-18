@@ -1,7 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export const api = {
-  // ... (bestehende Client, Project, Service Funktionen)
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
     if (error) throw error;
@@ -185,13 +184,22 @@ export const api = {
   },
 
   addTimeEntry: async (entry: any) => {
-    const dbEntry = { client_id: entry.clientId, project_id: entry.projectId, service_id: entry.serviceId, date: entry.date, start_time: entry.startTime, end_time: entry.endTime, duration_minutes: entry.duration_minutes, description: entry.description };
+    const dbEntry = { 
+      user_id: entry.userId,
+      client_id: entry.clientId, 
+      project_id: entry.projectId, 
+      service_id: entry.serviceId || null, 
+      date: entry.date, 
+      start_time: entry.startTime, 
+      end_time: entry.endTime, 
+      duration_minutes: entry.duration_minutes, 
+      description: entry.description 
+    };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
     if (error) throw error;
     return data;
   },
 
-  // Absences
   getAbsences: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -237,7 +245,6 @@ export const api = {
     return data;
   },
 
-  // Assignments
   getAssignments: async () => {
     const { data, error } = await supabase.from('assignments').select('*').order('date').order('start_time');
     if (error) throw error;

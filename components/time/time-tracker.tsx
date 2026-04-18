@@ -11,10 +11,12 @@ export function TimeTracker() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: services } = useQuery({ queryKey: ['services'], queryFn: api.getServices });
   const { data: entries } = useQuery({ queryKey: ['timeEntries'], queryFn: api.getTimeEntries });
+  const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
 
   return (
     <div className="space-y-6">
@@ -38,18 +40,30 @@ export function TimeTracker() {
             const client = clients?.find(c => c.id === entry.clientId);
             const project = projects?.find(p => p.id === entry.projectId);
             const service = services?.find(s => s.id === entry.serviceId);
+            const user = users?.find(u => u.id === entry.userId);
             
             return (
               <li key={entry.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex flex-col gap-2 sm:gap-1">
-                    <p className="text-sm font-semibold text-gray-900">{entry.description}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-gray-900">{entry.description}</p>
+                      {currentUser?.role === 'admin' && user && (
+                        <span className="text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-500 font-bold uppercase">
+                          {user.name}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap items-center text-xs text-gray-500 gap-2 font-medium">
                       <span className="bg-gray-100 px-2 py-0.5 rounded">{client?.name}</span>
                       <span>&rarr;</span>
                       <span className="bg-gray-100 px-2 py-0.5 rounded">{project?.name}</span>
-                      <span>&rarr;</span>
-                      <span className="bg-gray-100 px-2 py-0.5 rounded">{service?.name}</span>
+                      {service && (
+                        <>
+                          <span>&rarr;</span>
+                          <span className="bg-gray-100 px-2 py-0.5 rounded">{service.name}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-left sm:text-right flex items-center justify-between sm:block border-t sm:border-0 border-gray-100 pt-3 sm:pt-0">
@@ -71,6 +85,8 @@ export function TimeTracker() {
           clients={clients || []}
           projects={projects || []}
           services={services || []}
+          users={users || []}
+          currentUser={currentUser}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['timeEntries'] })}
         />
       )}
@@ -78,7 +94,8 @@ export function TimeTracker() {
   );
 }
 
-function EntryModal({ onClose, clients, projects, services, onSuccess }: any) {
+function EntryModal({ onClose, clients, projects, services, users, currentUser, onSuccess }: any) {
+  const [targetUserId, setTargetUserId] = useState(currentUser?.id || '');
   const [clientId, setClientId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -109,12 +126,11 @@ function EntryModal({ onClose, clients, projects, services, onSuccess }: any) {
         diff -= 30; // 30 min pause
     }
 
-    // rounding logic to 15 min could go here
     addMutation.mutate({
-      userId: 'u1',
+      userId: targetUserId,
       clientId,
       projectId,
-      serviceId,
+      serviceId: serviceId || null,
       date,
       startTime,
       endTime,
@@ -122,6 +138,8 @@ function EntryModal({ onClose, clients, projects, services, onSuccess }: any) {
       description
     });
   };
+
+  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <div className="relative z-50" aria-labelledby="modal-title" role="dialog" aria-modal="true">
@@ -132,6 +150,16 @@ function EntryModal({ onClose, clients, projects, services, onSuccess }: any) {
             <h3 className="text-lg font-semibold leading-6 text-gray-900" id="modal-title">Zeiteintrag erstellen</h3>
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               
+              {isAdmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Mitarbeiter</label>
+                  <select required value={targetUserId} onChange={e => setTargetUserId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
+                    <option value="">Bitte wählen...</option>
+                    {users.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700">Kunde</label>
                 <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); setServiceId(''); }} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
@@ -149,9 +177,9 @@ function EntryModal({ onClose, clients, projects, services, onSuccess }: any) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Leistung</label>
-                <select required disabled={!projectId} value={serviceId} onChange={e => setServiceId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
-                  <option value="">Bitte wählen...</option>
+                <label className="block text-sm font-medium text-gray-700">Leistung (optional)</label>
+                <select disabled={!projectId} value={serviceId} onChange={e => setServiceId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
+                  <option value="">Ohne Leistung...</option>
                   {availableServices.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
