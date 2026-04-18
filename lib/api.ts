@@ -125,6 +125,8 @@ export const api = {
     if (error) throw error;
     return data.map(p => ({
       id: p.id,
+      firstName: p.first_name,
+      lastName: p.last_name,
       name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Mitarbeiter',
       role: p.role,
       permissions: p.permissions,
@@ -155,6 +157,20 @@ export const api = {
     const { data, error } = await supabase.functions.invoke('create-user', {
       body: userData
     });
+    if (error) throw error;
+    return data;
+  },
+
+  updateUser: async (id: string, updates: any) => {
+    const { data, error } = await supabase.from('profiles').update({
+      first_name: updates.firstName,
+      last_name: updates.lastName,
+      role: updates.role,
+      target_hours_monthly: updates.targetHoursMonthly,
+      vacation_total: updates.vacationTotal,
+      permissions: updates.permissions,
+      updated_at: new Date().toISOString()
+    }).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },

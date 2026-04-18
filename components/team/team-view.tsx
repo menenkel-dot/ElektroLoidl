@@ -20,6 +20,7 @@ const MENU_ITEMS = [
 export function TeamView() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
   const { data: users, isLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
 
   if (isLoading) return <div className="text-slate-500">Lade Team...</div>;
@@ -32,7 +33,10 @@ export function TeamView() {
           <p className="mt-2 text-[14px] text-slate-500">Mitarbeiter verwalten und Berechtigungen festlegen.</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setEditingUser(null);
+            setIsModalOpen(true);
+          }}
           className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
         >
           <Plus className="-ml-1 mr-2 h-5 w-5" />
@@ -90,18 +94,31 @@ export function TeamView() {
               </div>
             </div>
             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-               <button className="text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors">Bearbeiten</button>
+               <button 
+                onClick={() => {
+                  setEditingUser(user);
+                  setIsModalOpen(true);
+                }}
+                className="text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+               >
+                 Bearbeiten
+               </button>
             </div>
           </div>
         ))}
       </div>
 
       {isModalOpen && (
-        <CreateUserModal 
-          onClose={() => setIsModalOpen(false)} 
+        <UserModal 
+          user={editingUser}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingUser(null);
+          }} 
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
             setIsModalOpen(false);
+            setEditingUser(null);
           }}
         />
       )}
@@ -109,20 +126,31 @@ export function TeamView() {
   );
 }
 
-function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('employee');
-  const [targetHours, setTargetHours] = useState('160');
-  const [vacationDays, setVacationDays] = useState('30');
-  const [visibleItems, setVisibleItems] = useState<string[]>(['dashboard', 'time', 'absence']);
+function UserModal({ user, onClose, onSuccess }: { user?: any, onClose: () => void, onSuccess: () => void }) {
+  const [firstName, setFirstName] = useState(user?.firstName || '');
+  const [lastName, setLastName] = useState(user?.lastName || '');
+  const [email, setEmail] = useState(''); // Nur bei Neuanlage nötig
+  const [password, setPassword] = useState(''); // Nur bei Neuanlage nötig
+  const [role, setRole] = useState(user?.role || 'employee');
+  const [targetHours, setTargetHours] = useState(user?.targetHoursMonthly?.toString() || '160');
+  const [vacationDays, setVacationDays] = useState(user?.vacationTotal?.toString() || '30');
+  const [visibleItems, setVisibleItems] = useState<string[]>(user?.permissions?.visible_menu_items || ['dashboard', 'time', 'absence']);
 
-  const mutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: api.createUser,
     onSuccess: () => {
       toast.success('Benutzer erfolgreich angelegt');
+      onSuccess();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler: ' + error.message);
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => api.updateUser(user.id, data),
+    onSuccess: () => {
+      toast.success('Benutzer erfolgreich aktualisiert');
       onSuccess();
     },
     onError: (error: any) => {
@@ -136,17 +164,23 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate({
-      email,
-      password,
+    const data = {
       firstName,
       lastName,
       role,
       targetHoursMonthly: Number(targetHours),
       vacationTotal: Number(vacationDays),
       permissions: { visible_menu_items: visibleItems }
-    });
+    };
+
+    if (user) {
+      updateMutation.mutate(data);
+    } else {
+      createMutation.mutate({ ...data, email, password });
+    }
   };
+
+  const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="relative z-50">
@@ -155,7 +189,9 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
         <div className="flex min-h-full items-center justify-center p-4">
           <div className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl">
             <div className="px-6 py-5 border-b border-slate-100">
-               <h3 className="text-[18px] font-bold text-slate-900 leading-none">Neuen Mitarbeiter anlegen</h3>
+               <h3 className="text-[18px] font-bold text-slate-900 leading-none">
+                 {user ? 'Mitarbeiter bearbeiten' : 'Neuen Mitarbeiter anlegen'}
+               </h3>
             </div>
             <form onSubmit={handleSubmit} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
@@ -167,14 +203,19 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Nachname</label>
                   <input required type="text" value={lastName} onChange={e => setLastName(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="Mustermann" />
                 </div>
-                <div>
-                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">E-Mail Adresse</label>
-                  <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="max@beispiel.de" />
-                </div>
-                <div>
-                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Passwort</label>
-                  <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="********" />
-                </div>
+                
+                {!user && (
+                  <>
+                    <div>
+                      <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">E-Mail Adresse</label>
+                      <input required type="email" value={email} onChange={e => setEmail(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="max@beispiel.de" />
+                    </div>
+                    <div>
+                      <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Passwort</label>
+                      <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="********" />
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Soll-Stunden (Monat)</label>
@@ -218,8 +259,8 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
               </div>
 
               <div className="pt-4 flex gap-3 border-t border-slate-100">
-                <button type="submit" disabled={mutation.isPending} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {mutation.isPending ? 'Wird erstellt...' : 'Mitarbeiter anlegen'}
+                <button type="submit" disabled={isPending} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                  {isPending ? 'Speichert...' : user ? 'Änderungen speichern' : 'Mitarbeiter anlegen'}
                 </button>
                 <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
                   Abbrechen
