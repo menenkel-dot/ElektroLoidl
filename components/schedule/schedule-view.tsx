@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
 import { format, addDays, startOfWeek, parseISO, isSameDay } from 'date-fns';
 import { de } from 'date-fns/locale';
+import Link from 'next/link';
 
 export function ScheduleView() {
   const queryClient = useQueryClient();
@@ -78,7 +79,11 @@ export function ScheduleView() {
                       {dayAssignments.map(asg => {
                         const project = projects?.find(p => p.id === asg.projectId);
                         return (
-                          <div key={asg.id} className="bg-blue-50 border border-blue-200 rounded p-2 mb-2 text-xs text-blue-800 shadow-sm">
+                          <Link 
+                            key={asg.id} 
+                            href={`/projects/${asg.projectId}`}
+                            className="block bg-blue-50 border border-blue-200 rounded p-2 mb-2 text-xs text-blue-800 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                          >
                             <div className="flex items-center gap-1 font-bold mb-1">
                               <Clock className="w-3 h-3" />
                               {asg.startTime ? asg.startTime.substring(0, 5) : 'Ganztag'}
@@ -86,7 +91,7 @@ export function ScheduleView() {
                             </div>
                             <span className="font-semibold block truncate">{project?.name}</span>
                             <span className="truncate block opacity-80 mt-1 italic">{asg.details}</span>
-                          </div>
+                          </Link>
                         )
                       })}
                     </div>
