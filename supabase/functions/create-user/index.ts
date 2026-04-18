@@ -17,7 +17,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { email, password, firstName, lastName, role, permissions } = await req.json()
+    const { email, password, firstName, lastName, role, permissions, targetHoursMonthly, vacationTotal } = await req.json()
 
     console.log("[create-user] Erstelle neuen User:", email);
 
@@ -31,14 +31,16 @@ serve(async (req) => {
 
     if (authError) throw authError
 
-    // 2. Profil aktualisieren (Trigger erstellt Profil automatisch, wir updaten Rolle/Permissions)
+    // 2. Profil aktualisieren
     const { error: profileError } = await supabaseClient
       .from('profiles')
       .update({ 
         first_name: firstName, 
         last_name: lastName, 
         role, 
-        permissions 
+        permissions,
+        target_hours_monthly: targetHoursMonthly || 160,
+        vacation_total: vacationTotal || 30
       })
       .eq('id', authUser.user.id)
 

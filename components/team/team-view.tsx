@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { User, Mail, Plus, Shield, UserCircle, CheckCircle2 } from 'lucide-react';
+import { User, Mail, Plus, Shield, UserCircle, CheckCircle2, Clock, Calendar } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -63,6 +63,17 @@ export function TeamView() {
                   </div>
                 </div>
               </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-2 text-[12px] text-slate-600">
+                   <Clock className="w-3.5 h-3.5 text-slate-400" />
+                   <span>{user.targetHoursMonthly}h / Monat</span>
+                </div>
+                <div className="flex items-center gap-2 text-[12px] text-slate-600">
+                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                   <span>{user.vacationTotal} Tage Urlaub</span>
+                </div>
+              </div>
               
               <div className="mt-6 pt-4 border-t border-slate-50">
                  <div className="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Sichtbare Menüpunkte</div>
@@ -104,6 +115,8 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('employee');
+  const [targetHours, setTargetHours] = useState('160');
+  const [vacationDays, setVacationDays] = useState('30');
   const [visibleItems, setVisibleItems] = useState<string[]>(['dashboard', 'time', 'absence']);
 
   const mutation = useMutation({
@@ -129,6 +142,8 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
       firstName,
       lastName,
       role,
+      targetHoursMonthly: Number(targetHours),
+      vacationTotal: Number(vacationDays),
       permissions: { visible_menu_items: visibleItems }
     });
   };
@@ -160,6 +175,16 @@ function CreateUserModal({ onClose, onSuccess }: { onClose: () => void, onSucces
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Passwort</label>
                   <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="********" />
                 </div>
+
+                <div>
+                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Soll-Stunden (Monat)</label>
+                  <input required type="number" value={targetHours} onChange={e => setTargetHours(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Urlaubstage (Jahr)</label>
+                  <input required type="number" value={vacationDays} onChange={e => setVacationDays(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" />
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Rolle</label>
                   <div className="flex gap-4">

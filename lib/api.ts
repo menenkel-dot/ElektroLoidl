@@ -161,8 +161,21 @@ export const api = {
 
   // Time Entries
   getTimeEntries: async () => {
-    const { data, error } = await supabase.from('time_entries').select('*').order('date', { ascending: false }).order('start_time', { ascending: false });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    
+    let query = supabase.from('time_entries').select('*');
+    
+    // Wenn kein Admin, nur eigene Einträge laden
+    if (profile?.role !== 'admin') {
+      query = query.eq('user_id', user.id);
+    }
+
+    const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: false });
     if (error) throw error;
+    
     return data.map(e => ({
       id: e.id,
       userId: e.user_id,
