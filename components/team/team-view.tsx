@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { User, Mail, Plus, Shield, UserCircle, CheckCircle2, Clock, Calendar } from 'lucide-react';
+import { User, Mail, Plus, Shield, UserCircle, CheckCircle2, Clock, Calendar, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -22,8 +22,32 @@ export function TeamView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const { data: users, isLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteUser,
+    onSuccess: () => {
+      toast.success('Mitarbeiter erfolgreich gelöscht');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (error: any) => {
+      toast.error('Fehler beim Löschen: ' + error.message);
+    }
+  });
+
+  const handleDelete = (user: any) => {
+    if (user.id === currentUser?.id) {
+      toast.error('Sie können Ihr eigenes Konto nicht löschen.');
+      return;
+    }
+    if (confirm(`Möchten Sie den Mitarbeiter "${user.name}" wirklich unwiderruflich löschen?`)) {
+      deleteMutation.mutate(user.id);
+    }
+  };
 
   if (isLoading) return <div className="text-slate-500">Lade Team...</div>;
+
+  const isAdmin = currentUser?.role === 'admin';
 
   return (
     <div className="space-y-6">
@@ -32,21 +56,23 @@ export function TeamView() {
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight leading-none">Team</h2>
           <p className="mt-2 text-[14px] text-slate-500">Mitarbeiter verwalten und Berechtigungen festlegen.</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingUser(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="-ml-1 mr-2 h-5 w-5" />
-          Mitarbeiter einladen
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setEditingUser(null);
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="-ml-1 mr-2 h-5 w-5" />
+            Mitarbeiter einladen
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {users?.map(user => (
-          <div key={user.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col group">
+          <div key={user.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col group relative">
             <div className="p-6 flex-1">
               <div className="flex items-center gap-4">
                 <div className="h-14 w-14 rounded-2xl border border-slate-100 bg-slate-50 flex items-center justify-center">
@@ -93,17 +119,26 @@ export function TeamView() {
                  </div>
               </div>
             </div>
-            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-               <button 
-                onClick={() => {
-                  setEditingUser(user);
-                  setIsModalOpen(true);
-                }}
-                className="text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-               >
-                 Bearbeiten
-               </button>
-            </div>
+            {isAdmin && (
+              <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+                <button 
+                  onClick={() => handleDelete(user)}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Löschen"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditingUser(user);
+                    setIsModalOpen(true);
+                  }}
+                  className="text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  Bearbeiten
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

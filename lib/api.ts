@@ -161,6 +161,14 @@ export const api = {
     return data;
   },
 
+  deleteUser: async (id: string) => {
+    const { data, error } = await supabase.functions.invoke('delete-user', { 
+      body: { userId: id } 
+    });
+    if (error) throw error;
+    return data;
+  },
+
   getTimeEntries: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
