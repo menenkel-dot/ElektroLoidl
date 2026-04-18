@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Plus, Trash2, Building2, User, Phone, MapPin, Edit2 } from 'lucide-react';
 import { Client } from '@/lib/mock-data';
+import toast from 'react-hot-toast';
 
 export function ClientsView() {
   const queryClient = useQueryClient();
@@ -16,7 +17,11 @@ export function ClientsView() {
   const deleteMutation = useMutation({
     mutationFn: api.deleteClient,
     onSuccess: () => {
+      toast.success('Kunde erfolgreich gelöscht');
       queryClient.invalidateQueries({ queryKey: ['clients'] });
+    },
+    onError: (error: any) => {
+      toast.error('Fehler beim Löschen: ' + error.message);
     }
   });
 
@@ -125,16 +130,24 @@ function ClientModal({ client, onClose, onSuccess }: { client: Client | null, on
   const createMutation = useMutation({
     mutationFn: api.addClient,
     onSuccess: () => {
+      toast.success('Kunde erfolgreich angelegt');
       onSuccess();
       onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler beim Speichern: ' + error.message);
     }
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: Partial<Client>) => api.updateClient(client!.id, data),
     onSuccess: () => {
+      toast.success('Kunde erfolgreich aktualisiert');
       onSuccess();
       onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler beim Aktualisieren: ' + error.message);
     }
   });
 

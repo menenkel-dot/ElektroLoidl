@@ -5,17 +5,35 @@ export const api = {
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
     if (error) throw error;
-    return data;
+    return data.map(c => ({
+      id: c.id,
+      name: c.name,
+      contactPerson: c.contact_person,
+      phone: c.phone,
+      address: c.address
+    }));
   },
 
   addClient: async (client: any) => {
-    const { data, error } = await supabase.from('clients').insert([client]).select().single();
+    const dbClient = {
+      name: client.name,
+      contact_person: client.contactPerson,
+      phone: client.phone,
+      address: client.address
+    };
+    const { data, error } = await supabase.from('clients').insert([dbClient]).select().single();
     if (error) throw error;
     return data;
   },
 
   updateClient: async (id: string, updates: any) => {
-    const { data, error } = await supabase.from('clients').update(updates).eq('id', id).select().single();
+    const dbUpdates = {
+      name: updates.name,
+      contact_person: updates.contactPerson,
+      phone: updates.phone,
+      address: updates.address
+    };
+    const { data, error } = await supabase.from('clients').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
@@ -30,7 +48,14 @@ export const api = {
   getProjects: async () => {
     const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
     if (error) throw error;
-    return data;
+    return data.map(p => ({
+      id: p.id,
+      clientId: p.client_id,
+      name: p.name,
+      budgetType: p.budget_type,
+      budgetValue: Number(p.budget_value),
+      spentValue: Number(p.spent_value)
+    }));
   },
 
   getProject: async (id: string) => {
@@ -40,17 +65,37 @@ export const api = {
     const { data: notes, error: nError } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
     const { data: images, error: iError } = await supabase.from('project_images').select('*').eq('project_id', id);
 
-    return { ...project, notes: notes || [], images: images || [] };
+    return { 
+      ...project, 
+      clientId: project.client_id,
+      budgetType: project.budget_type,
+      budgetValue: Number(project.budget_value),
+      spentValue: Number(project.spent_value),
+      notes: notes?.map(n => ({ id: n.id, text: n.text, createdAt: n.created_at })) || [], 
+      images: images || [] 
+    };
   },
 
   addProject: async (project: any) => {
-    const { data, error } = await supabase.from('projects').insert([project]).select().single();
+    const dbProject = {
+      client_id: project.clientId,
+      name: project.name,
+      budget_type: project.budgetType,
+      budget_value: project.budgetValue
+    };
+    const { data, error } = await supabase.from('projects').insert([dbProject]).select().single();
     if (error) throw error;
     return data;
   },
 
   updateProject: async (id: string, updates: any) => {
-    const { data, error } = await supabase.from('projects').update(updates).eq('id', id).select().single();
+    const dbUpdates: any = {};
+    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.clientId) dbUpdates.client_id = updates.clientId;
+    if (updates.budgetType) dbUpdates.budget_type = updates.budgetType;
+    if (updates.budgetValue) dbUpdates.budget_value = updates.budgetValue;
+
+    const { data, error } = await supabase.from('projects').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
@@ -78,11 +123,10 @@ export const api = {
   getUsers: async () => {
     const { data, error } = await supabase.from('profiles').select('*');
     if (error) throw error;
-    // Map to the expected format
     return data.map(p => ({
       id: p.id,
       name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Mitarbeiter',
-      role: 'employee', // Default
+      role: 'employee',
       targetHoursWeekly: 40,
       avatarUrl: p.avatar_url
     }));
@@ -92,7 +136,6 @@ export const api = {
   getTimeEntries: async () => {
     const { data, error } = await supabase.from('time_entries').select('*').order('date', { ascending: false }).order('start_time', { ascending: false });
     if (error) throw error;
-    // Adapt back-end snake_case to front-end camelCase
     return data.map(e => ({
       id: e.id,
       userId: e.user_id,
@@ -120,9 +163,6 @@ export const api = {
     };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
     if (error) throw error;
-    
-    // Budget update is handled via RLS or DB functions usually, 
-    // but we can simulate it here if needed or just let the database handle stats.
     return data;
   },
 
