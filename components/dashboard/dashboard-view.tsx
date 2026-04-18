@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
-import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, eachDayOfInterval, isWeekend } from 'date-fns';
 
 export function DashboardView() {
   const { data: userProfile, isLoading: profileLoading } = useQuery({
@@ -32,30 +32,57 @@ export function DashboardView() {
     return <div className="text-slate-500">Lade Dashboard...</div>;
   }
 
-  // Aktueller Tag Stats
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const todaysEntries = entries?.filter(e => e.date === today && e.userId === userProfile?.id) || [];
+  // Aktueller Monat Zeitspanne
+  const now = new Date();
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
+
+  // Heute Stats
+  const todayStr = format(now, 'yyyy-MM-dd');
+  const todaysEntries = entries?.filter(e => e.date === todayStr && e.userId === userProfile?.id) || [];
   const totalMinutesToday = todaysEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0);
   const hoursToday = (totalMinutesToday / 60).toFixed(1);
 
-  // Monats Stats
-  const monthStart = startOfMonth(new Date());
-  const monthEnd = endOfMonth(new Date());
-  
+  // Monat Ist-Stunden (Arbeitszeit)
   const monthlyEntries = entries?.filter(e => {
     const entryDate = parseISO(e.date);
     return e.userId === userProfile?.id && isWithinInterval(entryDate, { start: monthStart, end: monthEnd });
   }) || [];
+  const hoursWorkMonth = monthlyEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0) / 60;
 
-  const totalMinutesMonth = monthlyEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0);
-  const hoursMonth = totalMinutesMonth / 60;
+  // Monat Abwesenheits-Stunden (Genehmigter Urlaub/Krankheit)
+  // Wir nehmen an: 160h Monat = 20 Arbeitstage à 8h
+  const dailyTargetHours = (userProfile?.targetHoursMonthly || 160) / 20;
   
-  // Überstunden-Berechnung (Vereinfacht: Ist - (Soll / Tage im Monat * vergangene Tage))
-  // Hier nutzen wir einfach den Monats-Saldo gegen die monatlichen Soll-Stunden
-  const overtime = (hoursMonth - (userProfile?.targetHoursMonthly || 0)).toFixed(1);
+  const monthlyAbsences = absences?.filter(a => {
+    if (a.userId !== userProfile?.id || a.status !== 'approved') return false;
+    const start = parseISO(a.startDate);
+    const end = parseISO(a.endDate);
+    // Prüfen ob die Abwesenheit den aktuellen Monat überschneidet
+    return (start <= monthEnd && end >= monthStart);
+  }) || [];
+
+  let absenceHoursMonth = 0;
+  monthlyAbsences.forEach(absence => {
+    const start = parseISO(absence.startDate);
+    const end = parseISO(absence.endDate);
+    
+    // Nur Tage im aktuellen Monat zählen
+    const intervalStart = start < monthStart ? monthStart : start;
+    const intervalEnd = end > monthEnd ? monthEnd : end;
+    
+    const days = eachDayOfInterval({ start: intervalStart, end: intervalEnd });
+    const workDays = days.filter(day => !isWeekend(day)).length;
+    
+    absenceHoursMonth += workDays * dailyTargetHours;
+  });
+
+  // Saldo-Berechnung
+  const totalEffectiveHours = hoursWorkMonth + absenceHoursMonth;
+  const overtime = (totalEffectiveHours - (userProfile?.targetHoursMonthly || 0)).toFixed(1);
   const overtimePrefix = Number(overtime) >= 0 ? '+' : '';
 
-  // Urlaub
+  // Urlaubssaldo
   const openAbsences = absences?.filter(a => a.userId === userProfile?.id && a.status === 'pending').length || 0;
   const remainingVacation = (userProfile?.vacationTotal || 0) - (userProfile?.vacationUsed || 0);
 
@@ -66,7 +93,7 @@ export function DashboardView() {
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Heute (Ist)</div>
           <div className="text-[24px] font-bold text-slate-900 leading-none">{hoursToday} h</div>
-          <div className="text-[12px] mt-1 text-slate-400 font-medium">Soll: 08:00 h</div>
+          <div className="text-[12px] mt-1 text-slate-400 font-medium">Soll: {dailyTargetHours.toFixed(1)} h</div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200">
@@ -74,7 +101,7 @@ export function DashboardView() {
           <div className={`text-[24px] font-bold leading-none ${Number(overtime) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {overtimePrefix}{overtime} h
           </div>
-          <div className="text-[12px] mt-1 text-slate-400 font-medium">Monatssaldo (Ist vs Soll)</div>
+          <div className="text-[12px] mt-1 text-slate-400 font-medium">Inkl. genehmigter Abwesenheit</div>
         </div>
         
         <div className="bg-white p-5 rounded-xl border border-slate-200">
