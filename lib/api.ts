@@ -192,7 +192,7 @@ export const api = {
       date: entry.date, 
       start_time: entry.startTime, 
       end_time: entry.endTime, 
-      duration_minutes: entry.duration_minutes, 
+      duration_minutes: Math.round(entry.durationMinutes), 
       description: entry.description 
     };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
