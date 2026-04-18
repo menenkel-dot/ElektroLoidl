@@ -2,25 +2,42 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Clock, CalendarDays, BarChart3, Users, Briefcase, FileSignature, Zap, Building2, X } from 'lucide-react';
+import { LayoutDashboard, Clock, CalendarDays, BarChart3, Users, Briefcase, FileSignature, Building2, X } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useState } from 'react';
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Kunden', href: '/clients', icon: Building2 },
-  { name: 'Aufträge & Budgets', href: '/projects', icon: Briefcase },
-  { name: 'Einsatzplan', href: '/schedule', icon: CalendarDays },
-  { name: 'Zeiterfassung', href: '/time', icon: Clock },
-  { name: 'Abwesenheiten', href: '/absence', icon: FileSignature },
-  { name: 'Team', href: '/team', icon: Users },
-  { name: 'Berichte', href: '/reports', icon: BarChart3 },
+  { id: 'dashboard', name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { id: 'clients', name: 'Kunden', href: '/clients', icon: Building2 },
+  { id: 'projects', name: 'Aufträge & Budgets', href: '/projects', icon: Briefcase },
+  { id: 'schedule', name: 'Einsatzplan', href: '/schedule', icon: CalendarDays },
+  { id: 'time', name: 'Zeiterfassung', href: '/time', icon: Clock },
+  { id: 'absence', name: 'Abwesenheiten', href: '/absence', icon: FileSignature },
+  { id: 'team', name: 'Team', href: '/team', icon: Users },
+  { id: 'reports', name: 'Berichte', href: '/reports', icon: BarChart3 },
 ];
 
 export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
+  const [permissions, setPermissions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('profiles').select('permissions').eq('id', user.id).single();
+        if (data?.permissions?.visible_menu_items) {
+          setPermissions(data.permissions.visible_menu_items);
+        }
+      }
+    };
+    fetchProfile();
+  }, []);
+
+  const visibleNav = navigation.filter(item => permissions.includes(item.id));
 
   return (
     <>
-      {/* Mobile backdrop */}
       {isOpen && (
         <div 
           className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden transition-opacity"
@@ -28,20 +45,17 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         />
       )}
 
-      {/* Sidebar */}
       <div className={`
         flex w-[240px] flex-col bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 h-screen fixed inset-y-0 z-50 py-6 transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="px-6 pb-8 flex shrink-0 items-center justify-between">
           <div className="flex items-center">
-            {/* The actual image tag for logo.png */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/logo.png" 
               alt="Firmenlogo" 
               className="h-8 w-auto max-w-[160px] object-contain dark:invert"
-              // Fallback styling just in case the file is missing in public directory:
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.insertAdjacentHTML('afterend', '<div class="h-8 flex items-center text-[20px] font-extrabold text-slate-300 dark:text-slate-700">LOGO</div>');
@@ -54,11 +68,11 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         </div>
       <div className="flex flex-1 flex-col overflow-y-auto">
         <nav className="flex-1 flex flex-col">
-          {navigation.map((item) => {
+          {visibleNav.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             return (
               <Link
-                key={item.name}
+                key={item.id}
                 href={item.href}
                 onClick={() => {
                   if (window.innerWidth < 1024 && onClose) {

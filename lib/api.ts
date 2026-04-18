@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export const api = {
-  // Clients
+  // ... (bestehender Code bleibt erhalten)
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
     if (error) throw error;
@@ -44,7 +44,6 @@ export const api = {
     return true;
   },
 
-  // Projects
   getProjects: async () => {
     const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
     if (error) throw error;
@@ -112,27 +111,33 @@ export const api = {
     return data;
   },
 
-  // Services
   getServices: async () => {
     const { data, error } = await supabase.from('services').select('*');
     if (error) throw error;
     return data;
   },
 
-  // Users / Profiles
   getUsers: async () => {
     const { data, error } = await supabase.from('profiles').select('*');
     if (error) throw error;
     return data.map(p => ({
       id: p.id,
       name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Mitarbeiter',
-      role: 'employee',
+      role: p.role,
+      permissions: p.permissions,
       targetHoursWeekly: 40,
       avatarUrl: p.avatar_url
     }));
   },
 
-  // Time Entries
+  createUser: async (userData: any) => {
+    const { data, error } = await supabase.functions.invoke('create-user', {
+      body: userData
+    });
+    if (error) throw error;
+    return data;
+  },
+
   getTimeEntries: async () => {
     const { data, error } = await supabase.from('time_entries').select('*').order('date', { ascending: false }).order('start_time', { ascending: false });
     if (error) throw error;
@@ -166,7 +171,6 @@ export const api = {
     return data;
   },
 
-  // Absences
   getAbsences: async () => {
     const { data, error } = await supabase.from('absences').select('*').order('start_date', { ascending: false });
     if (error) throw error;
@@ -197,7 +201,6 @@ export const api = {
     return data;
   },
 
-  // Assignments
   getAssignments: async () => {
     const { data, error } = await supabase.from('assignments').select('*');
     if (error) throw error;
