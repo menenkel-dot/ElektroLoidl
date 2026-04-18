@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { Plus, Check, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
 const typeLabels = {
   vacation: 'Urlaub',
@@ -29,20 +30,30 @@ export function AbsenceView() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const { data: userProfile } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
-  const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: api.getAbsences });
+  const { data: absences, isLoading } = useQuery({ queryKey: ['absences'], queryFn: api.getAbsences });
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string, status: 'approved' | 'rejected' }) => api.updateAbsenceStatus(id, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['absences'] })
+    onSuccess: () => {
+      toast.success('Status aktualisiert');
+      queryClient.invalidateQueries({ queryKey: ['absences'] });
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    }
   });
+
+  const isAdmin = userProfile?.role === 'admin';
 
   return (
     <div className="space-y-6">
       <div className="flex sm:items-center justify-between flex-col sm:flex-row gap-4 border-b border-gray-200 pb-5">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 tracking-tight">Abwesenheiten</h2>
-          <p className="mt-1 text-sm text-gray-500">Urlaubsanträge und Krankmeldungen verwalten.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {isAdmin ? 'Alle Anträge der Mitarbeiter verwalten.' : 'Deine Urlaubsanträge und Krankmeldungen.'}
+          </p>
         </div>
         <button
           onClick={() => setIsModalOpen(true)}
@@ -54,50 +65,67 @@ export function AbsenceView() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <ul role="list" className="divide-y divide-gray-100">
-          {absences?.map((absence) => {
-            const user = users?.find(u => u.id === absence.userId);
-            
-            return (
-              <li key={absence.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-slate-500">{user?.name?.charAt(0) || '?'}</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{user?.name || 'Unbekannt'}</p>
-                      <p className="text-sm text-gray-500">
-                        {typeLabels[absence.type]} &middot; {format(parseISO(absence.startDate), 'dd.MM.yyyy')} - {format(parseISO(absence.endDate), 'dd.MM.yyyy')}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 justify-between sm:justify-end">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[absence.status]}`}>
-                      {statusLabels[absence.status]}
-                    </span>
-                    {absence.status === 'pending' && (
-                      <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
-                         <button onClick={() => statusMutation.mutate({ id: absence.id, status: 'approved' })} className="p-1 rounded-full text-emerald-600 hover:bg-emerald-50">
-                           <Check className="h-5 w-5" />
-                         </button>
-                         <button onClick={() => statusMutation.mutate({ id: absence.id, status: 'rejected' })} className="p-1 rounded-full text-red-600 hover:bg-red-50">
-                           <X className="h-5 w-5" />
-                         </button>
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-500">Lade Anträge...</div>
+        ) : absences?.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 italic">Keine Anträge vorhanden.</div>
+        ) : (
+          <ul role="list" className="divide-y divide-gray-100">
+            {absences?.map((absence) => {
+              const user = users?.find(u => u.id === absence.userId);
+              
+              return (
+                <li key={absence.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <span className="text-sm font-bold text-slate-500">{user?.name?.charAt(0) || '?'}</span>
                       </div>
-                    )}
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{user?.name || 'Unbekannt'}</p>
+                        <p className="text-sm text-gray-500">
+                          {typeLabels[absence.type]} &middot; {format(parseISO(absence.startDate), 'dd.MM.yyyy')} - {format(parseISO(absence.endDate), 'dd.MM.yyyy')}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 justify-between sm:justify-end">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[absence.status]}`}>
+                        {statusLabels[absence.status]}
+                      </span>
+                      {isAdmin && absence.status === 'pending' && (
+                        <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
+                           <button 
+                            onClick={() => statusMutation.mutate({ id: absence.id, status: 'approved' })} 
+                            className="p-1.5 rounded-full text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title="Genehmigen"
+                           >
+                             <Check className="h-5 w-5" />
+                           </button>
+                           <button 
+                            onClick={() => statusMutation.mutate({ id: absence.id, status: 'rejected' })} 
+                            className="p-1.5 rounded-full text-red-600 hover:bg-red-50 transition-colors"
+                            title="Ablehnen"
+                           >
+                             <X className="h-5 w-5" />
+                           </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {isModalOpen && (
         <AbsenceModal 
           onClose={() => setIsModalOpen(false)}
-          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['absences'] })}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['absences'] });
+            queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+          }}
         />
       )}
     </div>
@@ -112,8 +140,12 @@ function AbsenceModal({ onClose, onSuccess }: any) {
   const mutation = useMutation({
     mutationFn: api.addAbsence,
     onSuccess: () => {
+      toast.success('Antrag erfolgreich gestellt');
       onSuccess();
       onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler: ' + error.message);
     }
   });
 
@@ -124,7 +156,7 @@ function AbsenceModal({ onClose, onSuccess }: any) {
         <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
           <div className="relative transform overflow-hidden rounded-xl bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:p-6">
             <h3 className="text-lg font-semibold leading-6 text-gray-900">Abwesenheit beantragen</h3>
-            <form onSubmit={e => { e.preventDefault(); mutation.mutate({ userId: 'u1', type, startDate, endDate }); }} className="mt-6 space-y-4">
+            <form onSubmit={e => { e.preventDefault(); mutation.mutate({ type, startDate, endDate }); }} className="mt-6 space-y-4">
               
               <div>
                 <label className="block text-sm font-medium text-gray-700">Art</label>

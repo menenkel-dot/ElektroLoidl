@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export const api = {
-  // ... (bestehende Client, Project, Service Funktionen bleiben gleich)
+  // ... (bestehende Client, Project, Service Funktionen)
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
     if (error) throw error;
@@ -191,14 +191,41 @@ export const api = {
     return data;
   },
 
+  // Absences
   getAbsences: async () => {
-    const { data, error } = await supabase.from('absences').select('*').order('start_date', { ascending: false });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    
+    let query = supabase.from('absences').select('*');
+    if (profile?.role !== 'admin') {
+      query = query.eq('user_id', user.id);
+    }
+    
+    const { data, error } = await query.order('start_date', { ascending: false });
     if (error) throw error;
-    return data.map(a => ({ id: a.id, userId: a.user_id, type: a.type, startDate: a.start_date, endDate: a.end_date, status: a.status }));
+    return data.map(a => ({ 
+      id: a.id, 
+      userId: a.user_id, 
+      type: a.type, 
+      startDate: a.start_date, 
+      endDate: a.end_date, 
+      status: a.status 
+    }));
   },
   
   addAbsence: async (absence: any) => {
-    const dbAbsence = { type: absence.type, start_date: absence.startDate, end_date: absence.endDate };
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Nicht authentifiziert");
+
+    const dbAbsence = { 
+      user_id: user.id,
+      type: absence.type, 
+      start_date: absence.startDate, 
+      end_date: absence.endDate,
+      status: 'pending'
+    };
     const { data, error } = await supabase.from('absences').insert([dbAbsence]).select().single();
     if (error) throw error;
     return data;
