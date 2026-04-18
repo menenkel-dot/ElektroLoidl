@@ -1,180 +1,184 @@
-import { dbContext, TimeEntry, AbsenceRequest, JobAssignment, Client, Project } from './mock-data';
-import { v4 as uuidv4 } from 'uuid';
-
-// Simulated delay
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { supabase } from '@/integrations/supabase/client';
 
 export const api = {
   // Clients
   getClients: async () => {
-    await delay(300);
-    return dbContext.clients;
+    const { data, error } = await supabase.from('clients').select('*').order('name');
+    if (error) throw error;
+    return data;
   },
 
-  addClient: async (client: Omit<Client, 'id'>) => {
-    await delay(300);
-    const newClient = { ...client, id: uuidv4() };
-    dbContext.clients.push(newClient);
-    return newClient;
+  addClient: async (client: any) => {
+    const { data, error } = await supabase.from('clients').insert([client]).select().single();
+    if (error) throw error;
+    return data;
   },
 
-  updateClient: async (id: string, updates: Partial<Client>) => {
-    await delay(300);
-    const index = dbContext.clients.findIndex(c => c.id === id);
-    if (index !== -1) {
-      dbContext.clients[index] = { ...dbContext.clients[index], ...updates };
-      return dbContext.clients[index];
-    }
-    throw new Error('Client not found');
+  updateClient: async (id: string, updates: any) => {
+    const { data, error } = await supabase.from('clients').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   deleteClient: async (id: string) => {
-    await delay(300);
-    dbContext.clients = dbContext.clients.filter(c => c.id !== id);
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (error) throw error;
     return true;
   },
 
   // Projects
   getProjects: async () => {
-    await delay(300);
-    return dbContext.projects;
+    const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
   },
 
   getProject: async (id: string) => {
-    await delay(200);
-    const p = dbContext.projects.find(p => p.id === id);
-    if (!p) throw new Error('Not found');
-    return p;
+    const { data: project, error: pError } = await supabase.from('projects').select('*').eq('id', id).single();
+    if (pError) throw pError;
+
+    const { data: notes, error: nError } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
+    const { data: images, error: iError } = await supabase.from('project_images').select('*').eq('project_id', id);
+
+    return { ...project, notes: notes || [], images: images || [] };
   },
 
-  addProject: async (project: Omit<Project, 'id' | 'spentValue'>) => {
-    await delay(300);
-    const newProject = { ...project, id: uuidv4(), spentValue: 0, notes: [], images: [] };
-    dbContext.projects.push(newProject);
-    return newProject;
+  addProject: async (project: any) => {
+    const { data, error } = await supabase.from('projects').insert([project]).select().single();
+    if (error) throw error;
+    return data;
   },
 
-  updateProject: async (id: string, updates: Partial<Project>) => {
-    await delay(300);
-    const index = dbContext.projects.findIndex(p => p.id === id);
-    if (index !== -1) {
-      dbContext.projects[index] = { ...dbContext.projects[index], ...updates };
-      return dbContext.projects[index];
-    }
-    throw new Error('Project not found');
+  updateProject: async (id: string, updates: any) => {
+    const { data, error } = await supabase.from('projects').update(updates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   addProjectNote: async (projectId: string, text: string) => {
-    await delay(300);
-    const p = dbContext.projects.find(p => p.id === projectId);
-    if (p) {
-      if (!p.notes) p.notes = [];
-      const newNote = { id: uuidv4(), text, createdAt: new Date().toISOString() };
-      p.notes.unshift(newNote);
-      return newNote;
-    }
-    throw new Error('Project not found');
+    const { data, error } = await supabase.from('project_notes').insert([{ project_id: projectId, text }]).select().single();
+    if (error) throw error;
+    return data;
   },
 
   addProjectImage: async (projectId: string, url: string) => {
-    await delay(400); // simulate upload delay
-    const p = dbContext.projects.find(p => p.id === projectId);
-    if (p) {
-      if (!p.images) p.images = [];
-      const newImg = { id: uuidv4(), url };
-      p.images.push(newImg);
-      return newImg;
-    }
-    throw new Error('Project not found');
+    const { data, error } = await supabase.from('project_images').insert([{ project_id: projectId, url }]).select().single();
+    if (error) throw error;
+    return data;
   },
 
   // Services
   getServices: async () => {
-    await delay(300);
-    return dbContext.services;
+    const { data, error } = await supabase.from('services').select('*');
+    if (error) throw error;
+    return data;
   },
 
-  // Users
+  // Users / Profiles
   getUsers: async () => {
-    await delay(300);
-    return dbContext.users;
+    const { data, error } = await supabase.from('profiles').select('*');
+    if (error) throw error;
+    // Map to the expected format
+    return data.map(p => ({
+      id: p.id,
+      name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Mitarbeiter',
+      role: 'employee', // Default
+      targetHoursWeekly: 40,
+      avatarUrl: p.avatar_url
+    }));
   },
 
   // Time Entries
   getTimeEntries: async () => {
-    await delay(300);
-    return [...dbContext.timeEntries];
+    const { data, error } = await supabase.from('time_entries').select('*').order('date', { ascending: false }).order('start_time', { ascending: false });
+    if (error) throw error;
+    // Adapt back-end snake_case to front-end camelCase
+    return data.map(e => ({
+      id: e.id,
+      userId: e.user_id,
+      clientId: e.client_id,
+      projectId: e.project_id,
+      serviceId: e.service_id,
+      date: e.date,
+      startTime: e.start_time,
+      endTime: e.end_time,
+      durationMinutes: e.duration_minutes,
+      description: e.description
+    }));
   },
 
-  addTimeEntry: async (entry: Omit<TimeEntry, 'id'>) => {
-    await delay(400);
-    const newEntry = { ...entry, id: uuidv4() };
-    dbContext.timeEntries.unshift(newEntry);
+  addTimeEntry: async (entry: any) => {
+    const dbEntry = {
+      client_id: entry.clientId,
+      project_id: entry.projectId,
+      service_id: entry.serviceId,
+      date: entry.date,
+      start_time: entry.startTime,
+      end_time: entry.endTime,
+      duration_minutes: entry.durationMinutes,
+      description: entry.description
+    };
+    const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
+    if (error) throw error;
     
-    // Update project budget logic (simplified)
-    const project = dbContext.projects.find(p => p.id === entry.projectId);
-    if (project) {
-      if (project.budgetType === 'hours') {
-        project.spentValue += entry.durationMinutes / 60;
-      } else {
-        const service = dbContext.services.find(s => s.id === entry.serviceId);
-        if (service && service.rate) {
-          project.spentValue += (entry.durationMinutes / 60) * service.rate;
-        }
-      }
-    }
-    return newEntry;
-  },
-
-  updateTimeEntry: async (id: string, updates: Partial<TimeEntry>) => {
-    await delay(300);
-    const index = dbContext.timeEntries.findIndex(t => t.id === id);
-    if (index !== -1) {
-      dbContext.timeEntries[index] = { ...dbContext.timeEntries[index], ...updates };
-      return dbContext.timeEntries[index];
-    }
-    throw new Error('Not found');
-  },
-
-  deleteTimeEntry: async (id: string) => {
-    await delay(300);
-    dbContext.timeEntries = dbContext.timeEntries.filter(t => t.id !== id);
-    return true;
+    // Budget update is handled via RLS or DB functions usually, 
+    // but we can simulate it here if needed or just let the database handle stats.
+    return data;
   },
 
   // Absences
   getAbsences: async () => {
-    await delay(300);
-    return [...dbContext.absences];
+    const { data, error } = await supabase.from('absences').select('*').order('start_date', { ascending: false });
+    if (error) throw error;
+    return data.map(a => ({
+      id: a.id,
+      userId: a.user_id,
+      type: a.type,
+      startDate: a.start_date,
+      endDate: a.end_date,
+      status: a.status
+    }));
   },
   
-  addAbsence: async (absence: Omit<AbsenceRequest, 'id' | 'status'>) => {
-    await delay(300);
-    const newAbs = { ...absence, id: uuidv4(), status: 'pending' as const };
-    dbContext.absences.push(newAbs);
-    return newAbs;
+  addAbsence: async (absence: any) => {
+    const dbAbsence = {
+      type: absence.type,
+      start_date: absence.startDate,
+      end_date: absence.endDate
+    };
+    const { data, error } = await supabase.from('absences').insert([dbAbsence]).select().single();
+    if (error) throw error;
+    return data;
   },
 
-  updateAbsenceStatus: async (id: string, status: AbsenceRequest['status']) => {
-    await delay(300);
-    const index = dbContext.absences.findIndex(a => a.id === id);
-    if (index !== -1) {
-      dbContext.absences[index].status = status;
-      return dbContext.absences[index];
-    }
-    throw new Error('Not found');
+  updateAbsenceStatus: async (id: string, status: string) => {
+    const { data, error } = await supabase.from('absences').update({ status }).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   },
 
   // Assignments
   getAssignments: async () => {
-    await delay(300);
-    return [...dbContext.assignments];
+    const { data, error } = await supabase.from('assignments').select('*');
+    if (error) throw error;
+    return data.map(asg => ({
+      id: asg.id,
+      userId: asg.user_id,
+      projectId: asg.project_id,
+      date: asg.date,
+      details: asg.details
+    }));
   },
 
-  addAssignment: async (assignment: Omit<JobAssignment, 'id'>) => {
-    await delay(300);
-    const newAsg = { ...assignment, id: uuidv4() };
-    dbContext.assignments.push(newAsg);
-    return newAsg;
+  addAssignment: async (assignment: any) => {
+    const dbAsg = {
+      user_id: assignment.userId,
+      project_id: assignment.projectId,
+      date: assignment.date,
+      details: assignment.details
+    };
+    const { data, error } = await supabase.from('assignments').insert([dbAsg]).select().single();
+    if (error) throw error;
+    return data;
   }
 };
