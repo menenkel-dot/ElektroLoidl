@@ -3,8 +3,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import Link from 'next/link';
+import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 
 export function DashboardView() {
+  const { data: userProfile, isLoading: profileLoading } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: api.getCurrentUser,
+  });
+
   const { data: entries, isLoading: entriesLoading } = useQuery({
     queryKey: ['timeEntries'],
     queryFn: api.getTimeEntries,
@@ -15,20 +21,43 @@ export function DashboardView() {
     queryFn: api.getProjects,
   });
 
-  const isLoading = entriesLoading || projectsLoading;
+  const { data: absences } = useQuery({
+    queryKey: ['absences'],
+    queryFn: api.getAbsences,
+  });
+
+  const isLoading = profileLoading || entriesLoading || projectsLoading;
 
   if (isLoading) {
     return <div className="text-slate-500">Lade Dashboard...</div>;
   }
 
-  // Calculate some stats
-  const today = new Date().toISOString().split('T')[0];
-  const todaysEntries = entries?.filter(e => e.date === today) || [];
+  // Aktueller Tag Stats
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const todaysEntries = entries?.filter(e => e.date === today && e.userId === userProfile?.id) || [];
   const totalMinutesToday = todaysEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0);
   const hoursToday = (totalMinutesToday / 60).toFixed(1);
 
-  // Check break logic
-  const hasBreakMissing = totalMinutesToday > 360 && todaysEntries.length === 1; // Simplistic logic: >6h in one entry usually means no break logged.
+  // Monats Stats
+  const monthStart = startOfMonth(new Date());
+  const monthEnd = endOfMonth(new Date());
+  
+  const monthlyEntries = entries?.filter(e => {
+    const entryDate = parseISO(e.date);
+    return e.userId === userProfile?.id && isWithinInterval(entryDate, { start: monthStart, end: monthEnd });
+  }) || [];
+
+  const totalMinutesMonth = monthlyEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0);
+  const hoursMonth = totalMinutesMonth / 60;
+  
+  // Überstunden-Berechnung (Vereinfacht: Ist - (Soll / Tage im Monat * vergangene Tage))
+  // Hier nutzen wir einfach den Monats-Saldo gegen die monatlichen Soll-Stunden
+  const overtime = (hoursMonth - (userProfile?.targetHoursMonthly || 0)).toFixed(1);
+  const overtimePrefix = Number(overtime) >= 0 ? '+' : '';
+
+  // Urlaub
+  const openAbsences = absences?.filter(a => a.userId === userProfile?.id && a.status === 'pending').length || 0;
+  const remainingVacation = (userProfile?.vacationTotal || 0) - (userProfile?.vacationUsed || 0);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
@@ -37,25 +66,27 @@ export function DashboardView() {
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Heute (Ist)</div>
           <div className="text-[24px] font-bold text-slate-900 leading-none">{hoursToday} h</div>
-          <div className="text-[12px] mt-1 text-red-500 font-medium">Soll: 08:00 h</div>
+          <div className="text-[12px] mt-1 text-slate-400 font-medium">Soll: 08:00 h</div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Überstunden</div>
-          <div className="text-[24px] font-bold text-slate-900 leading-none">+12:40 h</div>
-          <div className="text-[12px] mt-1 text-green-500 font-medium">Monatssaldo</div>
+          <div className={`text-[24px] font-bold leading-none ${Number(overtime) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {overtimePrefix}{overtime} h
+          </div>
+          <div className="text-[12px] mt-1 text-slate-400 font-medium">Monatssaldo (Ist vs Soll)</div>
         </div>
         
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Urlaubssaldo</div>
-          <div className="text-[24px] font-bold text-slate-900 leading-none">14 Tage</div>
-          <div className="text-[12px] mt-1 text-slate-800 font-medium">3 Anträge offen</div>
+          <div className="text-[24px] font-bold text-slate-900 leading-none">{remainingVacation} Tage</div>
+          <div className="text-[12px] mt-1 text-slate-800 font-medium">{openAbsences} Anträge offen</div>
         </div>
         
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Aktive Aufträge</div>
           <div className="text-[24px] font-bold text-slate-900 leading-none">{projects?.length || 0}</div>
-          <div className="text-[12px] mt-1 text-slate-800 font-medium">3 Zuweisungen heute</div>
+          <div className="text-[12px] mt-1 text-slate-800 font-medium">Laufende Projekte</div>
         </div>
       </div>
 
@@ -120,13 +151,6 @@ export function DashboardView() {
               </div>
             )
           })}
-        </div>
-        <div className="mt-auto p-5 border-t border-slate-200">
-          <div className="text-[14px] font-semibold text-slate-900 mb-3">Zuweisungen Morgen</div>
-          <div className="p-2.5 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-[13px]">
-            <b>08:00:</b> Lager Logistikzentrum <br/>
-            <span className="text-slate-500">Kabelzug & Trassenbau</span>
-          </div>
         </div>
       </div>
     </div>

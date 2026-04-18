@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export const api = {
-  // ... (bestehender Code bleibt erhalten)
+  // Clients
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
     if (error) throw error;
@@ -44,6 +44,7 @@ export const api = {
     return true;
   },
 
+  // Projects
   getProjects: async () => {
     const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
     if (error) throw error;
@@ -79,7 +80,7 @@ export const api = {
     const dbProject = {
       client_id: project.clientId,
       name: project.name,
-      budget_type: project.budgetType,
+      budget_type: project.budget_type,
       budget_value: project.budgetValue
     };
     const { data, error } = await supabase.from('projects').insert([dbProject]).select().single();
@@ -111,12 +112,14 @@ export const api = {
     return data;
   },
 
+  // Services
   getServices: async () => {
     const { data, error } = await supabase.from('services').select('*');
     if (error) throw error;
     return data;
   },
 
+  // Users / Profiles
   getUsers: async () => {
     const { data, error } = await supabase.from('profiles').select('*');
     if (error) throw error;
@@ -125,9 +128,27 @@ export const api = {
       name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Mitarbeiter',
       role: p.role,
       permissions: p.permissions,
-      targetHoursWeekly: 40,
+      targetHoursMonthly: p.target_hours_monthly || 160,
+      vacationTotal: p.vacation_total || 30,
+      vacationUsed: p.vacation_used || 0,
+      overtimeBase: p.overtime_base || 0,
       avatarUrl: p.avatar_url
     }));
+  },
+
+  getCurrentUser: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    if (error) throw error;
+    return {
+      ...data,
+      name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Mitarbeiter',
+      targetHoursMonthly: data.target_hours_monthly || 160,
+      vacationTotal: data.vacation_total || 30,
+      vacationUsed: data.vacation_used || 0,
+      overtimeBase: data.overtime_base || 0
+    };
   },
 
   createUser: async (userData: any) => {
@@ -138,6 +159,7 @@ export const api = {
     return data;
   },
 
+  // Time Entries
   getTimeEntries: async () => {
     const { data, error } = await supabase.from('time_entries').select('*').order('date', { ascending: false }).order('start_time', { ascending: false });
     if (error) throw error;
@@ -163,7 +185,7 @@ export const api = {
       date: entry.date,
       start_time: entry.startTime,
       end_time: entry.endTime,
-      duration_minutes: entry.durationMinutes,
+      duration_minutes: entry.duration_minutes,
       description: entry.description
     };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
@@ -171,6 +193,7 @@ export const api = {
     return data;
   },
 
+  // Absences
   getAbsences: async () => {
     const { data, error } = await supabase.from('absences').select('*').order('start_date', { ascending: false });
     if (error) throw error;
@@ -201,6 +224,7 @@ export const api = {
     return data;
   },
 
+  // Assignments
   getAssignments: async () => {
     const { data, error } = await supabase.from('assignments').select('*');
     if (error) throw error;
