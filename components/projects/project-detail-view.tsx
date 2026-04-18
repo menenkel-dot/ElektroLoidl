@@ -6,16 +6,39 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Upload, FileText, ImageIcon, Clock, Euro } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import { de } from 'date-fns/locale';
+import de from 'date-fns/locale/de';
+
+// Typdefinitionen für die Komponente
+interface ProjectNote {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
+interface ProjectImage {
+  id: string;
+  url: string;
+}
+
+interface Project {
+  id: string;
+  clientId: string;
+  name: string;
+  budgetType: 'hours' | 'euro';
+  budgetValue: number;
+  spentValue: number;
+  notes: ProjectNote[];
+  images: ProjectImage[];
+}
 
 export function ProjectDetailView({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState('');
   
-  const { data: project, isLoading: projectLoading } = useQuery({ 
+  const { data: project, isLoading: projectLoading } = useQuery<Project>({ 
     queryKey: ['project', projectId], 
-    queryFn: () => api.getProject(projectId) 
+    queryFn: () => api.getProject(projectId) as Promise<Project>
   });
   
   const { data: clients } = useQuery({ 
@@ -118,7 +141,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                    Es gibt noch keine Notizen für diesen Auftrag.
                  </div>
               ) : (
-                project.notes.map(note => (
+                project.notes.map((note: ProjectNote) => (
                   <div key={note.id} className="p-6 hover:bg-slate-50/50 transition-colors">
                     <div className="text-[12px] font-semibold text-slate-400 mb-2">
                       {format(parseISO(note.createdAt), "dd. MMMM yyyy HH:mm", { locale: de })} Uhr
@@ -165,7 +188,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  {project.images.map(img => (
+                  {project.images.map((img: ProjectImage) => (
                     <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={img.url} alt="Auftragsbild" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
