@@ -21,7 +21,7 @@ export default function LoginPage() {
               }}
             />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white text-center">Willkommen bei VoltTime</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white text-center">Willkommen</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2 text-center text-sm">
             Bitte melden Sie sich an, um fortzufahren.
           </p>
