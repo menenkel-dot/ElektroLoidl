@@ -6,7 +6,7 @@ import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Upload, FileText, ImageIcon, Clock, Euro } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-import de from 'date-fns/locale/de';
+import { de } from 'date-fns/locale';
 
 // Typdefinitionen für die Komponente
 interface ProjectNote {
