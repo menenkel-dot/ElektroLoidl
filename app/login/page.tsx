@@ -3,19 +3,27 @@
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { supabase } from '@/integrations/supabase/client';
-import { Zap } from 'lucide-react';
 
 export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
       <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-8">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-4">
-            <Zap className="text-white w-8 h-8" />
+          <div className="mb-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src="/logo.png" 
+              alt="VoltTime Logo" 
+              className="h-12 w-auto object-contain dark:invert"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.insertAdjacentHTML('afterend', '<div class="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center"><span class="text-white font-bold text-xl">V</span></div>');
+              }}
+            />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">VoltTime Login</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white text-center">Willkommen bei VoltTime</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-2 text-center text-sm">
-            Bitte melden Sie sich an, um Ihre Zeiterfassung zu verwalten.
+            Bitte melden Sie sich an, um fortzufahren.
           </p>
         </div>
         
