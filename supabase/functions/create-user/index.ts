@@ -12,14 +12,18 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Missing environment variables");
+    }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const { email, password, firstName, lastName, role, permissions, targetHoursMonthly, vacationTotal } = await req.json()
 
-    console.log("[create-user] Erstelle neuen User:", email);
+    console.log("[create-user] Versuche User anzulegen:", email);
 
     // 1. User in Auth anlegen
     const { data: authUser, error: authError } = await supabaseClient.auth.admin.createUser({
@@ -29,22 +33,33 @@ serve(async (req) => {
       user_metadata: { first_name: firstName, last_name: lastName }
     })
 
-    if (authError) throw authError
+    if (authError) {
+      console.error("[create-user] Auth Error:", authError.message);
+      throw authError;
+    }
 
-    // 2. Profil aktualisieren
+    const userId = authUser.user.id;
+    console.log("[create-user] User angelegt mit ID:", userId);
+
+    // 2. Profil aktualisieren (Warten, falls der Trigger noch läuft)
+    // Wir nutzen upsert, um sicherzugehen
     const { error: profileError } = await supabaseClient
       .from('profiles')
-      .update({ 
+      .upsert({ 
+        id: userId,
         first_name: firstName, 
         last_name: lastName, 
         role, 
         permissions,
         target_hours_monthly: targetHoursMonthly || 160,
-        vacation_total: vacationTotal || 30
-      })
-      .eq('id', authUser.user.id)
+        vacation_total: vacationTotal || 30,
+        updated_at: new Date().toISOString()
+      });
 
-    if (profileError) throw profileError
+    if (profileError) {
+      console.error("[create-user] Profile Update Error:", profileError.message);
+      throw profileError;
+    }
 
     return new Response(JSON.stringify({ user: authUser.user }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -52,7 +67,7 @@ serve(async (req) => {
     })
 
   } catch (error) {
-    console.error("[create-user] Fehler:", error.message)
+    console.error("[create-user] Kritischer Fehler:", error.message)
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
