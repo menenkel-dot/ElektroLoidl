@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Plus } from 'lucide-react';
+import { Plus, Clock, Coffee } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -106,9 +106,9 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('16:00');
+  const [pauseMinutes, setPauseMinutes] = useState('30');
   const [description, setDescription] = useState('');
 
-  // Sync userId if currentUser loads after modal open
   useEffect(() => {
     if (currentUser?.id && !targetUserId) {
       setTargetUserId(currentUser.id);
@@ -146,11 +146,16 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
       return;
     }
 
+    // Brutto-Dauer in Minuten
     let diff = (end.getTime() - start.getTime()) / 60000;
     
-    // Automatische Pausenabzug bei > 6h
-    if (diff > 360) {
-        diff -= 30;
+    // Pausenabzug
+    const pause = parseInt(pauseMinutes) || 0;
+    diff = diff - pause;
+
+    if (diff <= 0) {
+      toast.error('Die Arbeitszeit inklusive Pause darf nicht 0 oder negativ sein.');
+      return;
     }
 
     addMutation.mutate({
@@ -189,20 +194,21 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Kunde</label>
-                <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
-                  <option value="">Bitte wählen...</option>
-                  {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Auftrag</label>
-                <select required disabled={!clientId} value={projectId} onChange={e => { setProjectId(e.target.value); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
-                  <option value="">Bitte wählen...</option>
-                  {availableProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kunde</label>
+                  <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
+                    <option value="">Bitte wählen...</option>
+                    {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Auftrag</label>
+                  <select required disabled={!clientId} value={projectId} onChange={e => { setProjectId(e.target.value); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
+                    <option value="">Bitte wählen...</option>
+                    {availableProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -213,19 +219,39 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
                 </select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Datum</label>
                   <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                 </div>
-                <div className="grid grid-cols-2 gap-4 sm:col-span-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                    <input type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Pause (Min.)</label>
+                   <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                         <Coffee className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input type="number" min="0" value={pauseMinutes} onChange={e => setPauseMinutes(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 pl-9 pr-3 border" />
+                   </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Von (Uhrzeit)</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                       <Clock className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 pl-9 pr-3 border" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bis</label>
-                    <input type="time" required value={endTime} onChange={e => setEndTime(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bis (Uhrzeit)</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                       <Clock className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input type="time" required value={endTime} onChange={e => setEndTime(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 pl-9 pr-3 border" />
                   </div>
                 </div>
               </div>
