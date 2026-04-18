@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react';
 import { format, addDays, startOfWeek, parseISO, isSameDay } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -24,7 +24,7 @@ export function ScheduleView() {
       <div className="flex sm:items-center justify-between flex-col sm:flex-row gap-4 border-b border-gray-200 pb-5">
         <div>
           <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Einsatzplan</h2>
-          <p className="mt-2 text-[14px] text-slate-500">Mitarbeiter Aufträgen zuweisen.</p>
+          <p className="mt-2 text-[14px] text-slate-500">Mitarbeiter Aufträgen mit Uhrzeit zuweisen.</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-white rounded-md shadow-sm border border-gray-200">
@@ -49,7 +49,7 @@ export function ScheduleView() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <div className="min-w-[800px]">
+        <div className="min-w-[1000px]">
           {/* Header Row */}
           <div className="grid grid-cols-6 border-b border-gray-200 bg-gray-50">
             <div className="p-4 border-r border-gray-200 font-semibold text-gray-900 text-sm">Mitarbeiter</div>
@@ -74,13 +74,18 @@ export function ScheduleView() {
                 {days.map(day => {
                   const dayAssignments = assignments?.filter(a => a.userId === user.id && isSameDay(parseISO(a.date), day)) || [];
                   return (
-                    <div key={day.toISOString()} className="p-2 border-r border-gray-200 relative min-h-[80px]">
+                    <div key={day.toISOString()} className="p-2 border-r border-gray-200 relative min-h-[100px]">
                       {dayAssignments.map(asg => {
                         const project = projects?.find(p => p.id === asg.projectId);
                         return (
-                          <div key={asg.id} className="bg-blue-50 border border-blue-200 rounded p-1.5 mb-1 text-xs text-blue-800">
+                          <div key={asg.id} className="bg-blue-50 border border-blue-200 rounded p-2 mb-2 text-xs text-blue-800 shadow-sm">
+                            <div className="flex items-center gap-1 font-bold mb-1">
+                              <Clock className="w-3 h-3" />
+                              {asg.startTime ? asg.startTime.substring(0, 5) : 'Ganztag'}
+                              {asg.endTime && ` - ${asg.endTime.substring(0, 5)}`}
+                            </div>
                             <span className="font-semibold block truncate">{project?.name}</span>
-                            <span className="truncate block opacity-80">{asg.details}</span>
+                            <span className="truncate block opacity-80 mt-1 italic">{asg.details}</span>
                           </div>
                         )
                       })}
@@ -109,6 +114,8 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
   const [userId, setUserId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startTime, setStartTime] = useState('07:30');
+  const [endTime, setEndTime] = useState('16:30');
   const [details, setDetails] = useState('');
 
   const mutation = useMutation({
@@ -120,13 +127,13 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
   });
 
   return (
-        <div className="relative z-50">
+    <div className="relative z-50">
       <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={onClose}></div>
       <div className="fixed inset-0 z-10 overflow-y-auto">
         <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
           <div className="relative transform overflow-hidden rounded-xl bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:p-6">
             <h3 className="text-lg font-semibold leading-6 text-gray-900">Mitarbeiter zuweisen</h3>
-            <form onSubmit={e => { e.preventDefault(); mutation.mutate({ userId, projectId, date, details }); }} className="mt-6 space-y-4">
+            <form onSubmit={e => { e.preventDefault(); mutation.mutate({ userId, projectId, date, startTime, endTime, details }); }} className="mt-6 space-y-4">
               
               <div>
                 <label className="block text-sm font-medium text-gray-700">Mitarbeiter</label>
@@ -137,21 +144,31 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
               </div>
 
               <div>
-                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Auftrag</label>
-                <select required value={projectId} onChange={e => setProjectId(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border bg-white">
+                <label className="block text-sm font-medium text-gray-700">Auftrag</label>
+                <select required value={projectId} onChange={e => setProjectId(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
                   <option value="">Bitte wählen...</option>
                   {projects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Datum</label>
-                <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700">Datum</label>
+                  <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Von (Uhrzeit)</label>
+                  <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Bis (Uhrzeit)</label>
+                  <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">Details / Anweisung</label>
-                <input type="text" value={details} onChange={e => setDetails(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                <input type="text" value={details} onChange={e => setDetails(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" placeholder="z.B. Treffen am Lager" />
               </div>
 
               <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">

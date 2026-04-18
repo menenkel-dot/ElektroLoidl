@@ -1,7 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 
 export const api = {
-  // Clients
+  // ... (bestehende Client, Project, Service Funktionen bleiben gleich)
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
     if (error) throw error;
@@ -44,7 +44,6 @@ export const api = {
     return true;
   },
 
-  // Projects
   getProjects: async () => {
     const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
     if (error) throw error;
@@ -61,10 +60,8 @@ export const api = {
   getProject: async (id: string) => {
     const { data: project, error: pError } = await supabase.from('projects').select('*').eq('id', id).single();
     if (pError) throw pError;
-
-    const { data: notes, error: nError } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
-    const { data: images, error: iError } = await supabase.from('project_images').select('*').eq('project_id', id);
-
+    const { data: notes } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
+    const { data: images } = await supabase.from('project_images').select('*').eq('project_id', id);
     return { 
       ...project, 
       clientId: project.client_id,
@@ -77,12 +74,7 @@ export const api = {
   },
 
   addProject: async (project: any) => {
-    const dbProject = {
-      client_id: project.clientId,
-      name: project.name,
-      budget_type: project.budget_type,
-      budget_value: project.budgetValue
-    };
+    const dbProject = { client_id: project.clientId, name: project.name, budget_type: project.budget_type, budget_value: project.budgetValue };
     const { data, error } = await supabase.from('projects').insert([dbProject]).select().single();
     if (error) throw error;
     return data;
@@ -94,7 +86,6 @@ export const api = {
     if (updates.clientId) dbUpdates.client_id = updates.clientId;
     if (updates.budgetType) dbUpdates.budget_type = updates.budgetType;
     if (updates.budgetValue) dbUpdates.budget_value = updates.budgetValue;
-
     const { data, error } = await supabase.from('projects').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
@@ -112,14 +103,12 @@ export const api = {
     return data;
   },
 
-  // Services
   getServices: async () => {
     const { data, error } = await supabase.from('services').select('*');
     if (error) throw error;
     return data;
   },
 
-  // Users / Profiles
   getUsers: async () => {
     const { data, error } = await supabase.from('profiles').select('*');
     if (error) throw error;
@@ -154,9 +143,7 @@ export const api = {
   },
 
   createUser: async (userData: any) => {
-    const { data, error } = await supabase.functions.invoke('create-user', {
-      body: userData
-    });
+    const { data, error } = await supabase.functions.invoke('create-user', { body: userData });
     if (error) throw error;
     return data;
   },
@@ -175,23 +162,14 @@ export const api = {
     return data;
   },
 
-  // Time Entries
   getTimeEntries: async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
-
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-    
     let query = supabase.from('time_entries').select('*');
-    
-    // Wenn kein Admin, nur eigene Einträge laden
-    if (profile?.role !== 'admin') {
-      query = query.eq('user_id', user.id);
-    }
-
+    if (profile?.role !== 'admin') { query = query.eq('user_id', user.id); }
     const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: false });
     if (error) throw error;
-    
     return data.map(e => ({
       id: e.id,
       userId: e.user_id,
@@ -207,41 +185,20 @@ export const api = {
   },
 
   addTimeEntry: async (entry: any) => {
-    const dbEntry = {
-      client_id: entry.clientId,
-      project_id: entry.projectId,
-      service_id: entry.serviceId,
-      date: entry.date,
-      start_time: entry.startTime,
-      end_time: entry.endTime,
-      duration_minutes: entry.duration_minutes,
-      description: entry.description
-    };
+    const dbEntry = { client_id: entry.clientId, project_id: entry.projectId, service_id: entry.serviceId, date: entry.date, start_time: entry.startTime, end_time: entry.endTime, duration_minutes: entry.duration_minutes, description: entry.description };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
     if (error) throw error;
     return data;
   },
 
-  // Absences
   getAbsences: async () => {
     const { data, error } = await supabase.from('absences').select('*').order('start_date', { ascending: false });
     if (error) throw error;
-    return data.map(a => ({
-      id: a.id,
-      userId: a.user_id,
-      type: a.type,
-      startDate: a.start_date,
-      endDate: a.end_date,
-      status: a.status
-    }));
+    return data.map(a => ({ id: a.id, userId: a.user_id, type: a.type, startDate: a.start_date, endDate: a.end_date, status: a.status }));
   },
   
   addAbsence: async (absence: any) => {
-    const dbAbsence = {
-      type: absence.type,
-      start_date: absence.startDate,
-      end_date: absence.endDate
-    };
+    const dbAbsence = { type: absence.type, start_date: absence.startDate, end_date: absence.endDate };
     const { data, error } = await supabase.from('absences').insert([dbAbsence]).select().single();
     if (error) throw error;
     return data;
@@ -255,13 +212,15 @@ export const api = {
 
   // Assignments
   getAssignments: async () => {
-    const { data, error } = await supabase.from('assignments').select('*');
+    const { data, error } = await supabase.from('assignments').select('*').order('date').order('start_time');
     if (error) throw error;
     return data.map(asg => ({
       id: asg.id,
       userId: asg.user_id,
       projectId: asg.project_id,
       date: asg.date,
+      startTime: asg.start_time,
+      endTime: asg.end_time,
       details: asg.details
     }));
   },
@@ -271,6 +230,8 @@ export const api = {
       user_id: assignment.userId,
       project_id: assignment.projectId,
       date: assignment.date,
+      start_time: assignment.startTime,
+      end_time: assignment.endTime,
       details: assignment.details
     };
     const { data, error } = await supabase.from('assignments').insert([dbAsg]).select().single();
