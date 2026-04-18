@@ -29,6 +29,8 @@ export default function LoginPage() {
         
         <Auth
           supabaseClient={supabase}
+          view="sign_in"
+          showLinks={false}
           appearance={{
             theme: ThemeSupa,
             variables: {
@@ -48,14 +50,6 @@ export default function LoginPage() {
                 password_label: 'Passwort',
                 button_label: 'Anmelden',
                 loading_button_label: 'Anmeldung...',
-                email_input_placeholder: 'Deine E-Mail Adresse',
-                password_input_placeholder: 'Dein Passwort',
-              },
-              sign_up: {
-                email_label: 'E-Mail',
-                password_label: 'Passwort',
-                button_label: 'Registrieren',
-                loading_button_label: 'Registrierung...',
                 email_input_placeholder: 'Deine E-Mail Adresse',
                 password_input_placeholder: 'Dein Passwort',
               }
