@@ -102,6 +102,33 @@ export const api = {
     return data;
   },
 
+  getProjectMembers: async (projectId: string) => {
+    const { data, error } = await supabase.from('project_members').select('*, profiles(*)').eq('project_id', projectId);
+    if (error) throw error;
+    return data.map(m => ({
+      id: m.id,
+      projectId: m.project_id,
+      userId: m.user_id,
+      user: {
+        id: m.profiles.id,
+        name: `${m.profiles.first_name || ''} ${m.profiles.last_name || ''}`.trim() || 'Mitarbeiter',
+        avatarUrl: m.profiles.avatar_url
+      }
+    }));
+  },
+
+  addProjectMember: async (projectId: string, userId: string) => {
+    const { data, error } = await supabase.from('project_members').insert([{ project_id: projectId, user_id: userId }]).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  removeProjectMember: async (projectId: string, userId: string) => {
+    const { error } = await supabase.from('project_members').delete().eq('project_id', projectId).eq('user_id', userId);
+    if (error) throw error;
+    return true;
+  },
+
   getServices: async () => {
     const { data, error } = await supabase.from('services').select('*');
     if (error) throw error;

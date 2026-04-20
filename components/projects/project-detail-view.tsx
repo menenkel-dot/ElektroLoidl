@@ -4,11 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Clock, Euro } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Clock, Euro, Users, Plus, Trash2, UserPlus } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import toast from 'react-hot-toast';
 
-// Typdefinitionen für die Komponente
 interface ProjectNote {
   id: string;
   text: string;
@@ -35,22 +35,27 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState('');
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   
   const { data: project, isLoading: projectLoading } = useQuery<Project>({ 
     queryKey: ['project', projectId], 
     queryFn: () => api.getProject(projectId) as Promise<Project>
   });
   
-  const { data: clients } = useQuery({ 
-    queryKey: ['clients'], 
-    queryFn: api.getClients 
+  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
+  const { data: members, isLoading: membersLoading } = useQuery({ 
+    queryKey: ['projectMembers', projectId], 
+    queryFn: () => api.getProjectMembers(projectId) 
   });
+  const { data: allUsers } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
 
   const noteMutation = useMutation({
     mutationFn: (text: string) => api.addProjectNote(projectId, text),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setNewNote('');
+      toast.success('Notiz hinzugefügt');
     }
   });
 
@@ -58,6 +63,15 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     mutationFn: (url: string) => api.addProjectImage(projectId, url),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      toast.success('Bild hochgeladen');
+    }
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: (userId: string) => api.removeProjectMember(projectId, userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projectMembers', projectId] });
+      toast.success('Mitarbeiter entfernt');
     }
   });
 
@@ -66,6 +80,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
   const client = clients?.find(c => c.id === project.clientId);
   const percentage = Math.min(100, Math.round((project.spentValue / project.budgetValue) * 100));
+  const isAdmin = currentUser?.role === 'admin';
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,7 +96,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <Link href="/projects" className="inline-flex items-center text-[14px] text-slate-500 hover:text-slate-900 transition-colors mb-4">
           <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -109,8 +123,56 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left Column: Notes */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Projekt-Team Sektion */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-slate-400" />
+                <h3 className="text-[16px] font-bold text-slate-900 leading-none">Projekt-Team</h3>
+              </div>
+              {isAdmin && (
+                <button 
+                  onClick={() => setIsMemberModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Mitarbeiter zuweisen
+                </button>
+              )}
+            </div>
+            <div className="p-6">
+              {membersLoading ? (
+                <div className="text-slate-400 text-sm">Lade Team...</div>
+              ) : !members || members.length === 0 ? (
+                <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  <p className="text-[13px] text-slate-500">Noch keine Mitarbeiter zugewiesen</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {members.map((member: any) => (
+                    <div key={member.userId} className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50/50">
+                      <div className="flex items-center gap-3">
+                        <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-bold">
+                          {member.user.name.charAt(0)}
+                        </div>
+                        <span className="text-[14px] font-medium text-slate-700">{member.user.name}</span>
+                      </div>
+                      {isAdmin && (
+                        <button 
+                          onClick={() => removeMemberMutation.mutate(member.userId)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
               <FileText className="w-5 h-5 text-slate-400" />
@@ -156,7 +218,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        {/* Right Column: Images & Meta */}
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
@@ -199,7 +260,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             </div>
           </div>
           
-          {/* Budget Widget summary */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden p-6">
              <h3 className="text-[14px] font-bold text-slate-900 leading-none mb-4">Budget-Status</h3>
              <div className="flex justify-between text-[13px] mb-2 font-medium">
@@ -215,6 +275,91 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
              <p className="text-[12px] text-slate-500">
                 {project.budgetValue - project.spentValue} {project.budgetType === 'euro' ? '€' : 'h'} verbleibend
              </p>
+          </div>
+        </div>
+      </div>
+
+      {isMemberModalOpen && (
+        <MemberModal 
+          projectId={projectId}
+          currentMembers={members || []}
+          allUsers={allUsers || []}
+          onClose={() => setIsMemberModalOpen(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['projectMembers', projectId] });
+            setIsMemberModalOpen(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function MemberModal({ projectId, currentMembers, allUsers, onClose, onSuccess }: any) {
+  const queryClient = useQueryClient();
+  const [selectedUserId, setSelectedUserId] = useState('');
+
+  const addMemberMutation = useMutation({
+    mutationFn: (userId: string) => api.addProjectMember(projectId, userId),
+    onSuccess: () => {
+      onSuccess();
+      toast.success('Mitarbeiter zugewiesen');
+    },
+    onError: (error: any) => {
+      toast.error('Fehler: ' + error.message);
+    }
+  });
+
+  const availableUsers = allUsers.filter((u: any) => !currentMembers.some((m: any) => m.userId === u.id));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedUserId) {
+      addMemberMutation.mutate(selectedUserId);
+    }
+  };
+
+  return (
+    <div className="relative z-50">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="fixed inset-0 z-10 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md">
+            <div className="px-6 py-5 border-b border-slate-100">
+               <h3 className="text-[18px] font-bold text-slate-900 leading-none">Mitarbeiter zuweisen</h3>
+            </div>
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Mitarbeiter auswählen</label>
+                <select 
+                  required 
+                  value={selectedUserId} 
+                  onChange={e => setSelectedUserId(e.target.value)} 
+                  className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border bg-white"
+                >
+                  <option value="">Bitte wählen...</option>
+                  {availableUsers.map((u: any) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+                {availableUsers.length === 0 && (
+                  <p className="mt-2 text-[12px] text-amber-600">Alle verfügbaren Mitarbeiter sind bereits zugewiesen.</p>
+                )}
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="submit" 
+                  disabled={!selectedUserId || addMemberMutation.isPending} 
+                  className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {addMemberMutation.isPending ? 'Wird zugewiesen...' : 'Zuweisen'}
+                </button>
+                <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
