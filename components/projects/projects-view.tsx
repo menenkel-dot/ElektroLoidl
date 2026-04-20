@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Briefcase, Euro, Clock, Plus, Edit2 } from 'lucide-react';
+import { Briefcase, Euro, Clock, Plus, Edit2, Users } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Project } from '@/lib/mock-data';
@@ -14,6 +14,7 @@ export function ProjectsView() {
 
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
+  const { data: allMembers } = useQuery({ queryKey: ['allProjectMembers'], queryFn: api.getAllProjectMembers });
 
   return (
     <div className="space-y-6">
@@ -37,6 +38,7 @@ export function ProjectsView() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {projects?.map(project => {
           const client = clients?.find(c => c.id === project.clientId);
+          const projectMembers = allMembers?.filter(m => m.projectId === project.id) || [];
           const percentage = Math.min(100, Math.round((project.spentValue / project.budgetValue) * 100));
           const isWarning = percentage >= 80;
           const isOver = percentage >= 100;
@@ -55,6 +57,33 @@ export function ProjectsView() {
                     <div className={`p-2 rounded-lg ${project.budgetType === 'euro' ? 'bg-emerald-50 text-emerald-600' : 'bg-purple-50 text-purple-600'}`}>
                       {project.budgetType === 'euro' ? <Euro className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
                     </div>
+                  </div>
+
+                  {/* Team Avatars */}
+                  <div className="mt-4 flex items-center gap-2">
+                    <div className="flex -space-x-2 overflow-hidden">
+                      {projectMembers.slice(0, 5).map((member) => (
+                        <div 
+                          key={member.id} 
+                          className="inline-block h-7 w-7 rounded-full ring-2 ring-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600"
+                          title={member.user.name}
+                        >
+                          {member.user.name.charAt(0)}
+                        </div>
+                      ))}
+                      {projectMembers.length > 5 && (
+                        <div className="inline-block h-7 w-7 rounded-full ring-2 ring-white bg-slate-50 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                          +{projectMembers.length - 5}
+                        </div>
+                      )}
+                    </div>
+                    {projectMembers.length === 0 ? (
+                      <span className="text-[12px] text-slate-400 italic">Kein Team zugewiesen</span>
+                    ) : (
+                      <span className="text-[12px] text-slate-500 font-medium">
+                        {projectMembers.length} {projectMembers.length === 1 ? 'Mitarbeiter' : 'Mitarbeiter'}
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-6">
