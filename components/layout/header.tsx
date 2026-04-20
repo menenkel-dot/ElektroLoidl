@@ -4,12 +4,19 @@ import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
+
+  const { data: userProfile } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: api.getCurrentUser,
+  });
 
   useEffect(() => {
     setMounted(true);
@@ -55,7 +62,9 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
         <div className="flex items-center gap-2">
           <div className="hidden sm:flex flex-col items-end mr-1">
-             <span className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-none">Mein Profil</span>
+             <span className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 leading-none">
+               {userProfile?.name || 'Lädt...'}
+             </span>
           </div>
           <div className="flex items-center justify-center p-2 rounded-full bg-slate-100 dark:bg-slate-800">
              <User className="h-5 w-5 text-slate-500 flex-shrink-0" />
