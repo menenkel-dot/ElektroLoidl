@@ -144,6 +144,25 @@ export const api = {
     return true;
   },
 
+  getProjectMaterials: async (projectId: string) => {
+    const { data, error } = await supabase.from('project_materials').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+    if (error) throw error;
+    return data;
+  },
+
+  addProjectMaterial: async (projectId: string, name: string, quantity: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase.from('project_materials').insert([{ project_id: projectId, user_id: user?.id, name, quantity }]).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  deleteProjectMaterial: async (id: string) => {
+    const { error } = await supabase.from('project_materials').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
   getServices: async () => {
     const { data, error } = await supabase.from('services').select('*');
     if (error) throw error;
