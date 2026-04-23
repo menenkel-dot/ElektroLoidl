@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Elektro Loidl',
-  description: 'Zeiterfassung für Elektro',
+  description: 'Zeiterfassung für Elektro Loidl',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {
