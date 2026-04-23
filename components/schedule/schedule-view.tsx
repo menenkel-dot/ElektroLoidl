@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History, Trash2 } from 'lucide-react';
 import { format, addDays, startOfWeek, parseISO, isSameDay, isWithinInterval } from 'date-fns';
 import { de } from 'date-fns/locale';
-import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 const typeLabels = {
   vacation: { label: 'Urlaub', icon: Plane, color: 'bg-orange-50 border-orange-200 text-orange-800 hover:bg-orange-100' },
@@ -18,6 +18,7 @@ export function ScheduleView() {
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState<any>(null);
 
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: assignments } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
@@ -26,6 +27,11 @@ export function ScheduleView() {
 
   const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 });
   const days = Array.from({ length: 5 }).map((_, i) => addDays(startOfCurrentWeek, i));
+
+  const handleOpenModal = (assignment: any = null) => {
+    setEditingAssignment(assignment);
+    setIsModalOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -47,7 +53,7 @@ export function ScheduleView() {
             </button>
           </div>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => handleOpenModal()}
             className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
           >
             <Plus className="-ml-1 mr-2 h-5 w-5" />
@@ -110,10 +116,10 @@ export function ScheduleView() {
                       {dayAssignments.map(asg => {
                         const project = projects?.find(p => p.id === asg.projectId);
                         return (
-                          <Link 
+                          <button 
                             key={asg.id} 
-                            href={`/projects/${asg.projectId}`}
-                            className="block bg-blue-50 border border-blue-200 rounded p-2 mb-2 text-xs text-blue-800 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                            onClick={() => handleOpenModal(asg)}
+                            className="w-full text-left block bg-blue-50 border border-blue-200 rounded p-2 mb-2 text-xs text-blue-800 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
                           >
                             <div className="flex items-center gap-1 font-bold mb-1">
                               <Clock className="w-3 h-3" />
@@ -122,7 +128,7 @@ export function ScheduleView() {
                             </div>
                             <span className="font-semibold block truncate">{project?.name}</span>
                             <span className="truncate block opacity-80 mt-1 italic">{asg.details}</span>
-                          </Link>
+                          </button>
                         )
                       })}
                     </div>
@@ -136,7 +142,11 @@ export function ScheduleView() {
 
       {isModalOpen && (
         <AssignmentModal 
-          onClose={() => setIsModalOpen(false)}
+          assignment={editingAssignment}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingAssignment(null);
+          }}
           users={users || []}
           projects={projects || []}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['assignments'] })}
@@ -146,21 +156,42 @@ export function ScheduleView() {
   );
 }
 
-function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
-  const [userId, setUserId] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState('07:30');
-  const [endTime, setEndTime] = useState('16:30');
-  const [details, setDetails] = useState('');
+function AssignmentModal({ assignment, onClose, users, projects, onSuccess }: any) {
+  const [userId, setUserId] = useState(assignment?.userId || '');
+  const [projectId, setProjectId] = useState(assignment?.projectId || '');
+  const [date, setDate] = useState(assignment?.date || new Date().toISOString().split('T')[0]);
+  const [startTime, setStartTime] = useState(assignment?.startTime?.substring(0, 5) || '07:30');
+  const [endTime, setEndTime] = useState(assignment?.endTime?.substring(0, 5) || '16:30');
+  const [details, setDetails] = useState(assignment?.details || '');
 
   const mutation = useMutation({
-    mutationFn: api.addAssignment,
+    mutationFn: (data: any) => assignment ? api.updateAssignment(assignment.id, data) : api.addAssignment(data),
     onSuccess: () => {
+      toast.success(assignment ? 'Einsatz aktualisiert' : 'Einsatz zugewiesen');
       onSuccess();
       onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler: ' + error.message);
     }
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteAssignment(assignment.id),
+    onSuccess: () => {
+      toast.success('Einsatz gelöscht');
+      onSuccess();
+      onClose();
+    },
+    onError: (error: any) => {
+      toast.error('Fehler beim Löschen: ' + error.message);
+    }
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    mutation.mutate({ userId, projectId, date, startTime, endTime, details });
+  };
 
   return (
     <div className="relative z-50">
@@ -168,8 +199,21 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
       <div className="fixed inset-0 z-10 overflow-y-auto">
         <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
           <div className="relative transform overflow-hidden rounded-xl bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md sm:p-6">
-            <h3 className="text-lg font-semibold leading-6 text-gray-900">Mitarbeiter zuweisen</h3>
-            <form onSubmit={e => { e.preventDefault(); mutation.mutate({ userId, projectId, date, startTime, endTime, details }); }} className="mt-6 space-y-4">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-semibold leading-6 text-gray-900">
+                {assignment ? 'Einsatz bearbeiten' : 'Mitarbeiter zuweisen'}
+              </h3>
+              {assignment && (
+                <button 
+                  type="button" 
+                  onClick={() => { if(confirm('Einsatz wirklich löschen?')) deleteMutation.mutate(); }}
+                  className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
               
               <div>
                 <label className="block text-sm font-medium text-gray-700">Mitarbeiter</label>
@@ -209,7 +253,7 @@ function AssignmentModal({ onClose, users, projects, onSuccess }: any) {
 
               <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
                 <button type="submit" disabled={mutation.isPending} className="inline-flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:col-start-2 disabled:opacity-50">
-                  {mutation.isPending ? 'Speichert...' : 'Zuweisen'}
+                  {mutation.isPending ? 'Speichert...' : assignment ? 'Speichern' : 'Zuweisen'}
                 </button>
                 <button type="button" onClick={onClose} className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:col-start-1 sm:mt-0">
                   Abbrechen

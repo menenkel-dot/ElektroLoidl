@@ -342,6 +342,20 @@ export const api = {
     return data;
   },
 
+  updateAssignment: async (id: string, updates: any) => {
+    const dbUpdates = {
+      user_id: updates.userId,
+      project_id: updates.projectId,
+      date: updates.date,
+      start_time: updates.startTime,
+      end_time: updates.endTime,
+      details: updates.details
+    };
+    const { data, error } = await supabase.from('assignments').update(dbUpdates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
   deleteAssignment: async (id: string) => {
     const { error } = await supabase.from('assignments').delete().eq('id', id);
     if (error) throw error;
