@@ -157,6 +157,12 @@ export const api = {
     return data;
   },
 
+  updateProjectMaterial: async (id: string, name: string, quantity: string) => {
+    const { data, error } = await supabase.from('project_materials').update({ name, quantity }).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
   deleteProjectMaterial: async (id: string) => {
     const { error } = await supabase.from('project_materials').delete().eq('id', id);
     if (error) throw error;

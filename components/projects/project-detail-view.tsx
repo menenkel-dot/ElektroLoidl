@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Clock, Euro, Users, Plus, Trash2, UserPlus, Package } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Clock, Euro, Users, Plus, Trash2, UserPlus, Package, Edit2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -44,6 +44,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [newNote, setNewNote] = useState('');
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<ProjectMaterial | null>(null);
   
   const { data: project, isLoading: projectLoading } = useQuery<Project>({ 
     queryKey: ['project', projectId], 
@@ -112,6 +113,11 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleEditMaterial = (material: ProjectMaterial) => {
+    setEditingMaterial(material);
+    setIsMaterialModalOpen(true);
   };
 
   return (
@@ -201,7 +207,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <h3 className="text-[16px] font-bold text-slate-900 leading-none">Materialliste</h3>
               </div>
               <button 
-                onClick={() => setIsMaterialModalOpen(true)}
+                onClick={() => { setEditingMaterial(null); setIsMaterialModalOpen(true); }}
                 className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
               >
                 <Plus className="w-4 h-4" />
@@ -223,7 +229,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                       <tr className="text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-100">
                         <th className="pb-3 pl-2">Bezeichnung</th>
                         <th className="pb-3">Anzahl</th>
-                        <th className="pb-3 text-right pr-2">Aktion</th>
+                        <th className="pb-3 text-right pr-2">Aktionen</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -232,14 +238,24 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                           <td className="py-3 pl-2 font-medium text-slate-700">{item.name}</td>
                           <td className="py-3 text-slate-600">{item.quantity}</td>
                           <td className="py-3 text-right pr-2">
-                            {isAdmin && (
+                            <div className="flex items-center justify-end gap-1">
                               <button 
-                                onClick={() => deleteMaterialMutation.mutate(item.id)}
-                                className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                onClick={() => handleEditMaterial(item)}
+                                className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                title="Bearbeiten"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Edit2 className="w-4 h-4" />
                               </button>
-                            )}
+                              {isAdmin && (
+                                <button 
+                                  onClick={() => { if(confirm('Material wirklich löschen?')) deleteMaterialMutation.mutate(item.id); }}
+                                  className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Löschen"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -372,10 +388,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       {isMaterialModalOpen && (
         <MaterialModal 
           projectId={projectId}
-          onClose={() => setIsMaterialModalOpen(false)}
+          material={editingMaterial}
+          onClose={() => { setIsMaterialModalOpen(false); setEditingMaterial(null); }}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['projectMaterials', projectId] });
             setIsMaterialModalOpen(false);
+            setEditingMaterial(null);
           }}
         />
       )}
@@ -454,15 +472,17 @@ function MemberModal({ projectId, currentMembers, allUsers, onClose, onSuccess }
   );
 }
 
-function MaterialModal({ projectId, onClose, onSuccess }: any) {
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('');
+function MaterialModal({ projectId, material, onClose, onSuccess }: any) {
+  const [name, setName] = useState(material?.name || '');
+  const [quantity, setQuantity] = useState(material?.quantity || '');
 
-  const addMaterialMutation = useMutation({
-    mutationFn: () => api.addProjectMaterial(projectId, name, quantity),
+  const mutation = useMutation({
+    mutationFn: () => material 
+      ? api.updateProjectMaterial(material.id, name, quantity)
+      : api.addProjectMaterial(projectId, name, quantity),
     onSuccess: () => {
       onSuccess();
-      toast.success('Material hinzugefügt');
+      toast.success(material ? 'Material aktualisiert' : 'Material hinzugefügt');
     },
     onError: (error: any) => {
       toast.error('Fehler: ' + error.message);
@@ -472,7 +492,7 @@ function MaterialModal({ projectId, onClose, onSuccess }: any) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name && quantity) {
-      addMaterialMutation.mutate();
+      mutation.mutate();
     }
   };
 
@@ -483,7 +503,9 @@ function MaterialModal({ projectId, onClose, onSuccess }: any) {
         <div className="flex min-h-full items-center justify-center p-4">
           <div className="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md">
             <div className="px-6 py-5 border-b border-slate-100">
-               <h3 className="text-[18px] font-bold text-slate-900 leading-none">Material hinzufügen</h3>
+               <h3 className="text-[18px] font-bold text-slate-900 leading-none">
+                 {material ? 'Material bearbeiten' : 'Material hinzufügen'}
+               </h3>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
@@ -512,10 +534,10 @@ function MaterialModal({ projectId, onClose, onSuccess }: any) {
               <div className="pt-2 flex gap-3">
                 <button 
                   type="submit" 
-                  disabled={!name || !quantity || addMaterialMutation.isPending} 
+                  disabled={!name || !quantity || mutation.isPending} 
                   className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
                 >
-                  {addMaterialMutation.isPending ? 'Wird hinzugefügt...' : 'Hinzufügen'}
+                  {mutation.isPending ? 'Wird gespeichert...' : material ? 'Speichern' : 'Hinzufügen'}
                 </button>
                 <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
                   Abbrechen
