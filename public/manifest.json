@@ -1,6 +1,6 @@
 {
-  "name": "VoltTime - Elektro Loidl",
-  "short_name": "VoltTime",
+  "name": "Elektro Loidl",
+  "short_name": "Elektro-Loidl",
   "description": "Zeiterfassung und Projektmanagement für Elektro Loidl",
   "start_url": "/",
   "display": "standalone",
