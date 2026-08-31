@@ -44,36 +44,30 @@ export const api = {
   },
 
   getProjects: async () => {
-    const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('projects').select('id, client_id, name').order('created_at', { ascending: false });
     if (error) throw error;
     return data.map(p => ({
       id: p.id,
       clientId: p.client_id,
-      name: p.name,
-      budgetType: p.budget_type,
-      budgetValue: Number(p.budget_value),
-      spentValue: Number(p.spent_value)
+      name: p.name
     }));
   },
 
   getProject: async (id: string) => {
-    const { data: project, error: pError } = await supabase.from('projects').select('*').eq('id', id).single();
+    const { data: project, error: pError } = await supabase.from('projects').select('id, client_id, name').eq('id', id).single();
     if (pError) throw pError;
     const { data: notes } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
     const { data: images } = await supabase.from('project_images').select('*').eq('project_id', id);
     return { 
       ...project, 
       clientId: project.client_id,
-      budgetType: project.budget_type,
-      budgetValue: Number(project.budget_value),
-      spentValue: Number(project.spent_value),
       notes: notes?.map(n => ({ id: n.id, text: n.text, createdAt: n.created_at })) || [], 
       images: images || [] 
     };
   },
 
   addProject: async (project: any) => {
-    const dbProject = { client_id: project.clientId, name: project.name, budget_type: project.budget_type, budget_value: project.budgetValue };
+    const dbProject = { client_id: project.clientId, name: project.name };
     const { data, error } = await supabase.from('projects').insert([dbProject]).select().single();
     if (error) throw error;
     return data;
@@ -83,8 +77,6 @@ export const api = {
     const dbUpdates: any = {};
     if (updates.name) dbUpdates.name = updates.name;
     if (updates.clientId) dbUpdates.client_id = updates.clientId;
-    if (updates.budgetType) dbUpdates.budget_type = updates.budgetType;
-    if (updates.budgetValue) dbUpdates.budget_value = updates.budgetValue;
     const { data, error } = await supabase.from('projects').update(dbUpdates).eq('id', id).select().single();
     if (error) throw error;
     return data;
@@ -327,7 +319,8 @@ export const api = {
       id: asg.id,
       userId: asg.user_id,
       projectId: asg.project_id,
-      date: asg.date,
+      startDate: asg.date,
+      endDate: asg.end_date,
       startTime: asg.start_time,
       endTime: asg.end_time,
       details: asg.details
@@ -338,7 +331,8 @@ export const api = {
     const dbAsg = {
       user_id: assignment.userId,
       project_id: assignment.projectId,
-      date: assignment.date,
+      date: assignment.startDate,
+      end_date: assignment.endDate,
       start_time: assignment.startTime,
       end_time: assignment.endTime,
       details: assignment.details
@@ -352,7 +346,8 @@ export const api = {
     const dbUpdates = {
       user_id: updates.userId,
       project_id: updates.projectId,
-      date: updates.date,
+      date: updates.startDate,
+      end_date: updates.endDate,
       start_time: updates.startTime,
       end_time: updates.endTime,
       details: updates.details

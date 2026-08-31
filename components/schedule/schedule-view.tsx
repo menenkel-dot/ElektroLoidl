@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History, Trash2 } from 'lucide-react';
-import { format, addDays, startOfWeek, parseISO, isSameDay, isWithinInterval } from 'date-fns';
+import { format, addDays, startOfWeek, parseISO, isWithinInterval } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
@@ -86,7 +86,13 @@ export function ScheduleView() {
                   <span className="text-sm font-medium text-gray-900">{user.name}</span>
                 </div>
                 {days.map(day => {
-                  const dayAssignments = assignments?.filter(a => a.userId === user.id && isSameDay(parseISO(a.date), day)) || [];
+                  const dayAssignments = assignments?.filter(a => {
+                    if (a.userId !== user.id) return false;
+                    return isWithinInterval(day, {
+                      start: parseISO(a.startDate),
+                      end: parseISO(a.endDate)
+                    });
+                  }) || [];
                   
                   const dayAbsences = absences?.filter(a => {
                     if (a.userId !== user.id || a.status !== 'approved') return false;
@@ -159,7 +165,9 @@ export function ScheduleView() {
 function AssignmentModal({ assignment, onClose, users, projects, onSuccess }: any) {
   const [userId, setUserId] = useState(assignment?.userId || '');
   const [projectId, setProjectId] = useState(assignment?.projectId || '');
-  const [date, setDate] = useState(assignment?.date || new Date().toISOString().split('T')[0]);
+  const initialStartDate = assignment?.startDate || new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(initialStartDate);
+  const [endDate, setEndDate] = useState(assignment?.endDate || initialStartDate);
   const [startTime, setStartTime] = useState(assignment?.startTime?.substring(0, 5) || '07:30');
   const [endTime, setEndTime] = useState(assignment?.endTime?.substring(0, 5) || '16:30');
   const [details, setDetails] = useState(assignment?.details || '');
@@ -190,7 +198,11 @@ function AssignmentModal({ assignment, onClose, users, projects, onSuccess }: an
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    mutation.mutate({ userId, projectId, date, startTime, endTime, details });
+    if (endDate < startDate) {
+      toast.error('Das Enddatum darf nicht vor dem Startdatum liegen.');
+      return;
+    }
+    mutation.mutate({ userId, projectId, startDate, endDate, startTime, endTime, details });
   };
 
   return (
@@ -232,9 +244,13 @@ function AssignmentModal({ assignment, onClose, users, projects, onSuccess }: an
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">Datum</label>
-                  <input type="date" required value={date} onChange={e => setDate(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Von (Datum)</label>
+                  <input type="date" required max={endDate} value={startDate} onChange={e => setStartDate(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Bis (Datum)</label>
+                  <input type="date" required min={startDate} value={endDate} onChange={e => setEndDate(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Von (Uhrzeit)</label>

@@ -23,9 +23,6 @@ export type Project = {
   id: string;
   clientId: string;
   name: string;
-  budgetType: 'hours' | 'euro';
-  budgetValue: number;
-  spentValue: number;
   notes?: ProjectNote[];
   images?: ProjectImage[];
 };
@@ -34,7 +31,7 @@ export type Service = {
   id: string;
   projectId: string;
   name: string;
-  rate?: number; // Hourly rate if euro budget
+  rate?: number;
 };
 
 export type User = {
@@ -62,7 +59,8 @@ export type JobAssignment = {
   id: string;
   userId: string;
   projectId: string;
-  date: string;
+  startDate: string;
+  endDate: string;
   details: string;
 }
 

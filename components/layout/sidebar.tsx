@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 const navigation = [
   { id: 'dashboard', name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { id: 'clients', name: 'Kunden', href: '/clients', icon: Building2 },
-  { id: 'projects', name: 'Aufträge & Budgets', href: '/projects', icon: Briefcase },
+  { id: 'projects', name: 'Aufträge', href: '/projects', icon: Briefcase },
   { id: 'schedule', name: 'Einsatzplan', href: '/schedule', icon: CalendarDays },
   { id: 'time', name: 'Zeiterfassung', href: '/time', icon: Clock },
   { id: 'absence', name: 'Abwesenheiten', href: '/absence', icon: FileSignature },

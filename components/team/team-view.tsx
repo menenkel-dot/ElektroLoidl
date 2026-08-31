@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 const MENU_ITEMS = [
   { id: 'dashboard', name: 'Dashboard' },
   { id: 'clients', name: 'Kunden' },
-  { id: 'projects', name: 'Aufträge & Budgets' },
+  { id: 'projects', name: 'Aufträge' },
   { id: 'schedule', name: 'Einsatzplan' },
   { id: 'time', name: 'Zeiterfassung' },
   { id: 'absence', name: 'Abwesenheiten' },

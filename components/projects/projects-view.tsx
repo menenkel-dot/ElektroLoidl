@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Briefcase, Euro, Clock, Plus, Edit2, Users } from 'lucide-react';
+import { Briefcase, Plus, Edit2 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Project } from '@/lib/mock-data';
@@ -20,8 +20,8 @@ export function ProjectsView() {
     <div className="space-y-6">
       <div className="flex sm:items-center justify-between flex-col sm:flex-row gap-4 border-b border-gray-200 pb-5">
         <div>
-          <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Aufträge & Budgets</h2>
-          <p className="mt-2 text-[14px] text-slate-500">Kunden, Aufträge und deren laufende Budgets.</p>
+          <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Aufträge</h2>
+          <p className="mt-2 text-[14px] text-slate-500">Kundenaufträge und zugewiesene Mitarbeiter verwalten.</p>
         </div>
         <button
           onClick={() => {
@@ -39,10 +39,6 @@ export function ProjectsView() {
         {projects?.map(project => {
           const client = clients?.find(c => c.id === project.clientId);
           const projectMembers = allMembers?.filter(m => m.projectId === project.id) || [];
-          const percentage = Math.min(100, Math.round((project.spentValue / project.budgetValue) * 100));
-          const isWarning = percentage >= 80;
-          const isOver = percentage >= 100;
-
           return (
             <div key={project.id} className="relative group">
               <Link href={`/projects/${project.id}`} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:border-blue-200 hover:shadow-md transition-all cursor-pointer h-full">
@@ -54,8 +50,8 @@ export function ProjectsView() {
                       </span>
                       <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{project.name}</h3>
                     </div>
-                    <div className={`p-2 rounded-lg ${project.budgetType === 'euro' ? 'bg-emerald-50 text-emerald-600' : 'bg-purple-50 text-purple-600'}`}>
-                      {project.budgetType === 'euro' ? <Euro className="h-5 w-5" /> : <Clock className="h-5 w-5" />}
+                    <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
+                      <Briefcase className="h-5 w-5" />
                     </div>
                   </div>
 
@@ -83,27 +79,6 @@ export function ProjectsView() {
                       <span className="text-[12px] text-slate-500 font-medium">
                         {projectMembers.length} {projectMembers.length === 1 ? 'Mitarbeiter' : 'Mitarbeiter'}
                       </span>
-                    )}
-                  </div>
-
-                  <div className="mt-6">
-                    <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-gray-500 font-medium">Verbrauch</span>
-                      <span className={`font-semibold ${isOver ? 'text-red-600' : 'text-gray-900'}`}>
-                        {project.spentValue.toLocaleString('de-DE', { maximumFractionDigits: 1 })} / {project.budgetValue.toLocaleString('de-DE', { maximumFractionDigits: 1 })} {project.budgetType === 'euro' ? '€' : 'h'}
-                      </span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                      <div 
-                        className={`h-2.5 rounded-full transition-all duration-500 ${isOver ? 'bg-red-500' : isWarning ? 'bg-amber-500' : 'bg-blue-600'}`} 
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    {isWarning && !isOver && (
-                      <p className="text-xs text-amber-600 mt-2 font-medium">Achtung: Budget fast aufgebraucht ({percentage}%)</p>
-                    )}
-                    {isOver && (
-                      <p className="text-xs text-red-600 mt-2 font-medium">Budget überschritten!</p>
                     )}
                   </div>
                 </div>
@@ -142,8 +117,6 @@ export function ProjectsView() {
 function ProjectModal({ project, onClose, clients, onSuccess }: { project: Project | null, onClose: () => void, clients: any[], onSuccess: () => void }) {
   const [name, setName] = useState(project?.name || '');
   const [clientId, setClientId] = useState(project?.clientId || '');
-  const [budgetType, setBudgetType] = useState<'hours' | 'euro'>(project?.budgetType || 'hours');
-  const [budgetValue, setBudgetValue] = useState(project?.budgetValue.toString() || '');
 
   const createMutation = useMutation({
     mutationFn: api.addProject,
@@ -165,7 +138,7 @@ function ProjectModal({ project, onClose, clients, onSuccess }: { project: Proje
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const data = { name, clientId, budgetType, budgetValue: Number(budgetValue) };
+    const data = { name, clientId };
     if (project) {
       updateMutation.mutate(data);
     } else {
@@ -195,20 +168,6 @@ function ProjectModal({ project, onClose, clients, onSuccess }: { project: Proje
               <div>
                 <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Auftragsname</label>
                 <input required type="text" value={name} onChange={e => setName(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="z. B. Netzwerkplanung 2026" />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Budget-Typ</label>
-                  <select required value={budgetType} onChange={e => setBudgetType(e.target.value as any)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border bg-white">
-                    <option value="hours">Stunden</option>
-                    <option value="euro">Euro (€)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Budget-Wert</label>
-                  <input required type="number" min="0" step="0.5" value={budgetValue} onChange={e => setBudgetValue(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="z. B. 100" />
-                </div>
               </div>
 
               <div className="pt-2 flex gap-3">

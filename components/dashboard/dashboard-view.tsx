@@ -87,8 +87,8 @@ export function DashboardView() {
   const remainingVacation = (userProfile?.vacationTotal || 0) - (userProfile?.vacationUsed || 0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
-      <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-2">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* Stat Cards */}
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Heute (Ist)</div>
@@ -147,37 +147,6 @@ export function DashboardView() {
               );
             })
           )}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200">
-          <h2 className="text-[16px] font-semibold text-slate-900 leading-none">Budget-Monitoring</h2>
-        </div>
-        <div className="flex-1">
-          {projects?.slice(0,3).map(project => {
-            const percentage = Math.min(100, Math.round((project.spentValue / project.budgetValue) * 100));
-            const isWarning = percentage >= 80;
-            return (
-              <div key={project.id} className="px-5 py-4">
-                <div className="flex justify-between mb-2 text-[13px] leading-none">
-                  <span className={isWarning ? 'text-red-500 font-semibold' : 'text-slate-900 font-medium'}>
-                    {project.name} {isWarning && '⚠️'}
-                  </span>
-                  <span className={isWarning ? 'text-red-500 font-semibold' : 'text-slate-900'}>{percentage}%</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-300 ${isWarning ? 'bg-red-500 animate-[pulse_2s_infinite]' : 'bg-green-500'}`} 
-                    style={{ width: `${percentage}%` }}
-                  />
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500">
-                  {project.spentValue} / {project.budgetValue} {project.budgetType === 'euro' ? '€' : 'h'} {isWarning && '(Limit kritisch)'}
-                </div>
-              </div>
-            )
-          })}
         </div>
       </div>
     </div>
