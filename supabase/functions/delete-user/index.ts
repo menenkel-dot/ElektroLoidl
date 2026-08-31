@@ -1,52 +1,42 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
+import {
+  corsHeaders,
+  errorResponse,
+  HttpError,
+  jsonResponse,
+  requireAdmin,
+} from '../_shared/admin-auth.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405)
+  }
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Missing environment variables");
-    }
-
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-
-    const { userId } = await req.json()
+    const { adminClient, adminUser } = await requireAdmin(req)
+    const body = (await req.json()) as { userId?: unknown }
+    const userId = typeof body.userId === 'string' ? body.userId : ''
 
     if (!userId) {
-      throw new Error("User ID is required");
+      throw new HttpError(400, 'User ID is required')
     }
 
-    console.log("[delete-user] Versuche User zu löschen:", userId);
+    if (userId === adminUser.id) {
+      throw new HttpError(400, 'Administrators cannot delete their own account')
+    }
 
-    // Löscht den User aus Auth (Profil wird durch CASCADE in DB automatisch gelöscht)
-    const { error: deleteError } = await supabaseClient.auth.admin.deleteUser(userId);
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId)
 
     if (deleteError) {
-      console.error("[delete-user] Auth Delete Error:", deleteError.message);
-      throw deleteError;
+      throw new HttpError(400, deleteError.message)
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
-
+    return jsonResponse({ success: true })
   } catch (error) {
-    console.error("[delete-user] Kritischer Fehler:", error.message)
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    })
+    return errorResponse(error, 'delete-user')
   }
 })

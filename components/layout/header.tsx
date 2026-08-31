@@ -1,7 +1,7 @@
 'use client';
 import { User, Menu, Sun, Moon, LogOut } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -9,18 +9,18 @@ import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
   const router = useRouter();
 
   const { data: userProfile } = useQuery({
     queryKey: ['currentUser'],
     queryFn: api.getCurrentUser,
   });
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -50,11 +50,12 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
       <div className="flex items-center gap-2 sm:gap-3">
         {mounted && (
           <button
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
             className="p-2.5 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title="Design wechseln"
+            aria-label="Design wechseln"
           >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
         )}
         

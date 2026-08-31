@@ -1,76 +1,99 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
+import {
+  corsHeaders,
+  errorResponse,
+  HttpError,
+  jsonResponse,
+  requireAdmin,
+} from '../_shared/admin-auth.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+type CreateUserBody = {
+  email?: unknown
+  password?: unknown
+  firstName?: unknown
+  lastName?: unknown
+  role?: unknown
+  permissions?: unknown
+  targetHoursMonthly?: unknown
+  vacationTotal?: unknown
 }
 
-serve(async (req) => {
+const allowedRoles = new Set(['admin', 'employee'])
+
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405)
+  }
 
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Missing environment variables");
+  try {
+    const { adminClient } = await requireAdmin(req)
+    const body = (await req.json()) as CreateUserBody
+
+    const email = typeof body.email === 'string' ? body.email.trim() : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+    const firstName = typeof body.firstName === 'string' ? body.firstName.trim() : ''
+    const lastName = typeof body.lastName === 'string' ? body.lastName.trim() : ''
+    const role = typeof body.role === 'string' ? body.role : 'employee'
+    const targetHoursMonthly = Number(body.targetHoursMonthly ?? 160)
+    const vacationTotal = Number(body.vacationTotal ?? 30)
+
+    if (!email || !email.includes('@')) {
+      throw new HttpError(400, 'A valid email address is required')
     }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+    if (password.length < 8) {
+      throw new HttpError(400, 'Password must contain at least 8 characters')
+    }
 
-    const { email, password, firstName, lastName, role, permissions, targetHoursMonthly, vacationTotal } = await req.json()
+    if (!firstName || !lastName) {
+      throw new HttpError(400, 'First and last name are required')
+    }
 
-    console.log("[create-user] Versuche User anzulegen:", email);
+    if (!allowedRoles.has(role)) {
+      throw new HttpError(400, 'Invalid role')
+    }
 
-    // 1. User in Auth anlegen
-    const { data: authUser, error: authError } = await supabaseClient.auth.admin.createUser({
+    if (!Number.isFinite(targetHoursMonthly) || targetHoursMonthly < 0 || targetHoursMonthly > 744) {
+      throw new HttpError(400, 'Invalid monthly target hours')
+    }
+
+    if (!Number.isFinite(vacationTotal) || vacationTotal < 0 || vacationTotal > 366) {
+      throw new HttpError(400, 'Invalid vacation allowance')
+    }
+
+    const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { first_name: firstName, last_name: lastName }
+      user_metadata: { first_name: firstName, last_name: lastName },
     })
 
     if (authError) {
-      console.error("[create-user] Auth Error:", authError.message);
-      throw authError;
+      throw new HttpError(400, authError.message)
     }
 
-    const userId = authUser.user.id;
-    console.log("[create-user] User angelegt mit ID:", userId);
-
-    // 2. Profil aktualisieren (Warten, falls der Trigger noch läuft)
-    // Wir nutzen upsert, um sicherzugehen
-    const { error: profileError } = await supabaseClient
-      .from('profiles')
-      .upsert({ 
-        id: userId,
-        first_name: firstName, 
-        last_name: lastName, 
-        role, 
-        permissions,
-        target_hours_monthly: targetHoursMonthly || 160,
-        vacation_total: vacationTotal || 30,
-        updated_at: new Date().toISOString()
-      });
+    const { error: profileError } = await adminClient.from('profiles').upsert({
+      id: authUser.user.id,
+      first_name: firstName,
+      last_name: lastName,
+      role,
+      permissions: body.permissions ?? {},
+      target_hours_monthly: targetHoursMonthly,
+      vacation_total: vacationTotal,
+      updated_at: new Date().toISOString(),
+    })
 
     if (profileError) {
-      console.error("[create-user] Profile Update Error:", profileError.message);
-      throw profileError;
+      await adminClient.auth.admin.deleteUser(authUser.user.id)
+      throw profileError
     }
 
-    return new Response(JSON.stringify({ user: authUser.user }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    })
-
+    return jsonResponse({ user: authUser.user })
   } catch (error) {
-    console.error("[create-user] Kritischer Fehler:", error.message)
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400,
-    })
+    return errorResponse(error, 'create-user')
   }
 })

@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
@@ -11,13 +11,19 @@ export const metadata: Metadata = {
   title: 'VoltTime - Elektro Loidl',
   description: 'Zeiterfassung und Projektmanagement für Elektro Loidl',
   manifest: '/manifest.json',
-  themeColor: '#2563eb',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'VoltTime',
   },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#2563eb',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Plus, Clock, Coffee } from 'lucide-react';
@@ -103,7 +103,7 @@ export function TimeTracker() {
 }
 
 function EntryModal({ onClose, clients, projects, services, users, currentUser, onSuccess }: any) {
-  const [targetUserId, setTargetUserId] = useState(currentUser?.id || '');
+  const [selectedTargetUserId, setSelectedTargetUserId] = useState('');
   const [clientId, setClientId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -113,11 +113,7 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
   const [pauseMinutes, setPauseMinutes] = useState('30');
   const [description, setDescription] = useState('');
 
-  useEffect(() => {
-    if (currentUser?.id && !targetUserId) {
-      setTargetUserId(currentUser.id);
-    }
-  }, [currentUser, targetUserId]);
+  const targetUserId = selectedTargetUserId || currentUser?.id || '';
 
   const addMutation = useMutation({
     mutationFn: api.addTimeEntry,
@@ -191,7 +187,7 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
               {isAdmin && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label>
-                  <select required value={targetUserId} onChange={e => setTargetUserId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
+                  <select required value={targetUserId} onChange={e => setSelectedTargetUserId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
                     <option value="">Bitte wählen...</option>
                     {users.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
