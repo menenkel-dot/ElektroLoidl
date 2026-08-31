@@ -1,3 +1,79 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:is(.dark *));
+
+:where(.dark) {
+    color-scheme: dark;
+  }
+
+  :where(.dark) .bg-white {
+    background-color: var(--color-slate-900);
+  }
+
+  :where(.dark) .bg-slate-50,
+  :where(.dark) .bg-gray-50,
+  :where(.dark) .bg-slate-50\/50,
+  :where(.dark) .bg-gray-50\/50 {
+    background-color: var(--color-slate-950);
+  }
+
+  :where(.dark) .bg-slate-100,
+  :where(.dark) .bg-gray-100 {
+    background-color: var(--color-slate-800);
+  }
+
+  :where(.dark) .border-slate-50,
+  :where(.dark) .border-slate-100,
+  :where(.dark) .border-slate-200,
+  :where(.dark) .border-slate-300,
+  :where(.dark) .border-gray-100,
+  :where(.dark) .border-gray-200,
+  :where(.dark) .border-gray-300 {
+    border-color: var(--color-slate-700);
+  }
+
+  :where(.dark) .text-slate-900,
+  :where(.dark) .text-gray-900 {
+    color: var(--color-slate-100);
+  }
+
+  :where(.dark) .text-slate-800,
+  :where(.dark) .text-gray-800,
+  :where(.dark) .text-slate-700,
+  :where(.dark) .text-gray-700 {
+    color: var(--color-slate-200);
+  }
+
+  :where(.dark) .text-slate-600,
+  :where(.dark) .text-gray-600,
+  :where(.dark) .text-slate-500,
+  :where(.dark) .text-gray-500 {
+    color: var(--color-slate-400);
+  }
+
+  :where(.dark) input,
+  :where(.dark) select,
+  :where(.dark) textarea {
+    background-color: var(--color-slate-900);
+    border-color: var(--color-slate-700);
+    color: var(--color-slate-100);
+  }
+
+  :where(.dark) input::placeholder,
+  :where(.dark) textarea::placeholder {
+    color: var(--color-slate-500);
+  }
+
+  :where(.dark) .recharts-cartesian-grid line {
+    stroke: var(--color-slate-700);
+  }
+
+  :where(.dark) .recharts-default-tooltip {
+    background-color: var(--color-slate-900) !important;
+    border-color: var(--color-slate-700) !important;
+    color: var(--color-slate-100) !important;
+  }
+
+  :where(.dark) .recharts-legend-item-text {
+    color: var(--color-slate-300) !important;
+}

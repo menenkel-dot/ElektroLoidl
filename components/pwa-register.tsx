@@ -4,18 +4,21 @@ import { useEffect } from 'react';
 
 export function PWARegister() {
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').then(
-          (registration) => {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
-          },
-          (err) => {
-            console.log('ServiceWorker registration failed: ', err);
-          }
-        );
+    if (!('serviceWorker' in navigator)) return;
+
+    const registerServiceWorker = () => {
+      navigator.serviceWorker.register('/sw.js').catch((error) => {
+        console.error('ServiceWorker registration failed:', error);
       });
+    };
+
+    if (document.readyState === 'complete') {
+      registerServiceWorker();
+      return;
     }
+
+    window.addEventListener('load', registerServiceWorker, { once: true });
+    return () => window.removeEventListener('load', registerServiceWorker);
   }, []);
 
   return null;
