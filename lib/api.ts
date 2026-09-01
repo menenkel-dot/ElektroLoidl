@@ -268,6 +268,20 @@ export const api = {
   },
 
   addTimeEntry: async (entry: any) => {
+    const { data: overlappingEntry, error: overlapError } = await supabase
+      .from('time_entries')
+      .select('id')
+      .eq('user_id', entry.userId)
+      .eq('date', entry.date)
+      .lt('start_time', entry.endTime)
+      .gt('end_time', entry.startTime)
+      .limit(1)
+      .maybeSingle();
+    if (overlapError) throw overlapError;
+    if (overlappingEntry) {
+      throw new Error('Für diesen Mitarbeiter besteht im gewählten Zeitraum bereits ein Zeiteintrag.');
+    }
+
     const dbEntry = { 
       user_id: entry.userId,
       client_id: entry.clientId, 
@@ -281,6 +295,9 @@ export const api = {
       material_recorded_confirmed: entry.materialRecordedConfirmed === true,
     };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
+    if (error?.code === '23P01') {
+      throw new Error('Für diesen Mitarbeiter besteht im gewählten Zeitraum bereits ein Zeiteintrag.');
+    }
     if (error) throw error;
     return data;
   },
