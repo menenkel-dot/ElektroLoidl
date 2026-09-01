@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Project } from '@/lib/mock-data';
@@ -22,12 +22,19 @@ export function ProjectsView() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: allMembers } = useQuery({ queryKey: ['allProjectMembers'], queryFn: api.getAllProjectMembers });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('de');
+  const filteredProjects = projects?.filter(project => {
+    const client = clients?.find(item => item.id === project.clientId);
+    return [project.name, client?.name, client?.address]
+      .some(value => value?.toLocaleLowerCase('de').includes(normalizedSearch));
+  });
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteProject,
@@ -68,8 +75,20 @@ export function ProjectsView() {
         </button>
       </div>
 
+      <div className="relative max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={event => setSearchTerm(event.target.value)}
+          placeholder="Aufträge oder Kunden suchen..."
+          aria-label="Aufträge suchen"
+          className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-[14px] text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects?.map(project => {
+        {filteredProjects?.map(project => {
           const client = clients?.find(c => c.id === project.clientId);
           const projectMembers = allMembers?.filter(m => m.projectId === project.id) || [];
           return (
@@ -142,6 +161,11 @@ export function ProjectsView() {
             </div>
           );
         })}
+        {filteredProjects?.length === 0 && (
+          <div className="col-span-full rounded-xl border border-slate-200 bg-white py-12 text-center text-slate-500">
+            {searchTerm.trim() ? 'Keine Aufträge für diese Suche gefunden.' : 'Es wurden noch keine Aufträge angelegt.'}
+          </div>
+        )}
       </div>
 
       {isModalOpen && (

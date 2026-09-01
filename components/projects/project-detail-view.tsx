@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2 } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -98,6 +98,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
   const client = clients?.find(c => c.id === project.clientId);
   const isAdmin = currentUser?.role === 'admin';
+  const clientAddress = client?.address?.trim();
+  const directionsUrl = clientAddress
+    ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(clientAddress)}`
+    : null;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -124,11 +128,38 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           Zurück zu Aufträgen
         </Link>
         <div className="border-b border-slate-200 pb-5">
-          <div>
-            <div className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-[13px] font-semibold text-blue-700 mb-2">
-              {client?.name || 'Unbekannter Kunde'}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="inline-flex items-center rounded-md bg-blue-50 px-2.5 py-1 text-[13px] font-semibold text-blue-700 mb-2">
+                {client?.name || 'Unbekannter Kunde'}
+              </div>
+              <h2 className="text-[28px] font-bold text-slate-900 tracking-tight leading-none">{project.name}</h2>
+              <div className="mt-3 flex items-start gap-2 text-[14px] text-slate-600">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span>{clientAddress || 'Keine Adresse hinterlegt'}</span>
+              </div>
             </div>
-            <h2 className="text-[28px] font-bold text-slate-900 tracking-tight leading-none">{project.name}</h2>
+            {directionsUrl ? (
+              <a
+                href={directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+              >
+                <Navigation className="h-4 w-4" />
+                Anfahrt
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Für diesen Kunden ist keine Adresse hinterlegt."
+                className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2.5 text-[14px] font-semibold text-slate-500"
+              >
+                <Navigation className="h-4 w-4" />
+                Anfahrt
+              </button>
+            )}
           </div>
         </div>
       </div>

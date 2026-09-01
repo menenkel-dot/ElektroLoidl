@@ -43,14 +43,10 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
         <button 
           onClick={onMenuClick}
           className="lg:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          aria-label="Navigation öffnen"
         >
           <Menu className="w-6 h-6" />
         </button>
-        <input 
-          type="text" 
-          placeholder="Suche..." 
-          className="hidden sm:block px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 dark:bg-slate-900 w-[200px] lg:w-[300px] text-[14px] text-slate-800 dark:text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
       </div>
       <div className="flex items-center gap-2 sm:gap-3">
         {mounted && (

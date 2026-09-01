@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Plus, Trash2, Building2, User, Phone, MapPin, Edit2 } from 'lucide-react';
+import { Plus, Trash2, Building2, User, Phone, MapPin, Edit2, Search } from 'lucide-react';
 import { Client } from '@/lib/mock-data';
 import toast from 'react-hot-toast';
 
@@ -11,6 +11,7 @@ export function ClientsView() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: clients, isLoading } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
 
@@ -28,6 +29,12 @@ export function ClientsView() {
   if (isLoading) {
     return <div className="text-slate-500">Lade Kunden...</div>;
   }
+
+  const normalizedSearch = searchTerm.trim().toLocaleLowerCase('de');
+  const filteredClients = clients?.filter(client =>
+    [client.name, client.contactPerson, client.phone, client.address]
+      .some(value => value?.toLocaleLowerCase('de').includes(normalizedSearch)),
+  );
 
   return (
     <div className="space-y-6">
@@ -48,8 +55,20 @@ export function ClientsView() {
         </button>
       </div>
 
+      <div className="relative max-w-xl">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          type="search"
+          value={searchTerm}
+          onChange={event => setSearchTerm(event.target.value)}
+          placeholder="Kunden suchen..."
+          aria-label="Kunden suchen"
+          className="w-full rounded-lg border border-slate-200 bg-white py-2.5 pl-10 pr-3 text-[14px] text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {clients?.map(client => (
+        {filteredClients?.map(client => (
           <div key={client.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden flex flex-col relative group">
             <div className="p-6">
               <div className="flex items-start gap-4">
@@ -102,9 +121,9 @@ export function ClientsView() {
             </div>
           </div>
         ))}
-        {clients?.length === 0 && (
+        {filteredClients?.length === 0 && (
           <div className="col-span-full py-12 text-center text-slate-500 bg-white rounded-2xl border border-slate-200">
-            Es wurden noch keine Kunden angelegt.
+            {searchTerm.trim() ? 'Keine Kunden für diese Suche gefunden.' : 'Es wurden noch keine Kunden angelegt.'}
           </div>
         )}
       </div>
