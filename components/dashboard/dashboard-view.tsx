@@ -50,9 +50,9 @@ export function DashboardView() {
   }) || [];
   const hoursWorkMonth = monthlyEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0) / 60;
 
-  // Monat Abwesenheits-Stunden (Genehmigter Urlaub/Krankheit)
-  // Wir nehmen an: 160h Monat = 20 Arbeitstage à 8h
-  const dailyTargetHours = (userProfile?.targetHoursMonthly || 160) / 20;
+  // Das Monatssoll wird auf die tatsächlichen Arbeitstage des Monats verteilt.
+  const monthWorkDays = eachDayOfInterval({ start: monthStart, end: monthEnd }).filter(day => !isWeekend(day));
+  const dailyTargetHours = (userProfile?.targetHoursMonthly || 160) / monthWorkDays.length;
   
   const monthlyAbsences = absences?.filter(a => {
     if (a.userId !== userProfile?.id || a.status !== 'approved') return false;
@@ -72,14 +72,18 @@ export function DashboardView() {
     const intervalEnd = end > monthEnd ? monthEnd : end;
     
     const days = eachDayOfInterval({ start: intervalStart, end: intervalEnd });
-    const workDays = days.filter(day => !isWeekend(day)).length;
+    const workDays = days.filter(day => !isWeekend(day) && day <= now).length;
     
     absenceHoursMonth += workDays * dailyTargetHours;
   });
 
-  // Saldo-Berechnung
+  // Saldo bis heute statt Abzug des kompletten Monatssolls am Monatsanfang.
   const totalEffectiveHours = hoursWorkMonth + absenceHoursMonth;
-  const overtime = (totalEffectiveHours - (userProfile?.targetHoursMonthly || 0)).toFixed(1);
+  const elapsedTargetHours = monthWorkDays.filter(day => day <= now).length * dailyTargetHours;
+  const overtimeBase = userProfile?.overtimeBase || 0;
+  const hasMonthlyActivity = monthlyEntries.length > 0 || absenceHoursMonth > 0;
+  const overtimeValue = overtimeBase + (hasMonthlyActivity ? totalEffectiveHours - elapsedTargetHours : 0);
+  const overtime = overtimeValue.toFixed(1);
   const overtimePrefix = Number(overtime) >= 0 ? '+' : '';
 
   // Urlaubssaldo

@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { Briefcase, CalendarDays, Clock, Download, Filter, TrendingUp, Users } from 'lucide-react';
+import { Briefcase, CalendarDays, Clock, Download, FileText, Filter, TrendingUp, Users } from 'lucide-react';
 import { endOfMonth, endOfYear, format, parseISO, startOfMonth, startOfYear, subMonths } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -115,6 +115,78 @@ export function ReportsView() {
     URL.revokeObjectURL(url);
   };
 
+  const exportPdf = async () => {
+    if (report.entries.length === 0 || invalidRange) return;
+
+    const [{ jsPDF }, { autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+    const document = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const periodLabel = startDate || endDate
+      ? `${startDate ? format(parseISO(startDate), 'dd.MM.yyyy') : 'Beginn'} bis ${endDate ? format(parseISO(endDate), 'dd.MM.yyyy') : 'heute'}`
+      : 'Gesamter Zeitraum';
+
+    document.setTextColor(15, 23, 42);
+    document.setFontSize(20);
+    document.text('Arbeitszeitbericht', 14, 17);
+    document.setFontSize(10);
+    document.setTextColor(100, 116, 139);
+    document.text(`Zeitraum: ${periodLabel}`, 14, 24);
+    document.text(`Erstellt am: ${format(new Date(), 'dd.MM.yyyy HH:mm')}`, 14, 29);
+
+    document.setFillColor(239, 246, 255);
+    document.roundedRect(14, 35, 60, 18, 2, 2, 'F');
+    document.roundedRect(79, 35, 60, 18, 2, 2, 'F');
+    document.roundedRect(144, 35, 60, 18, 2, 2, 'F');
+    document.setTextColor(71, 85, 105);
+    document.setFontSize(9);
+    document.text('Gesamtstunden', 19, 42);
+    document.text('Arbeitstage', 84, 42);
+    document.text('Aufträge', 149, 42);
+    document.setTextColor(15, 23, 42);
+    document.setFontSize(13);
+    document.text(`${report.totalHours.toFixed(1)} h`, 19, 49);
+    document.text(String(report.workDays), 84, 49);
+    document.text(String(report.activeProjects), 149, 49);
+
+    const tableHead = isAdmin
+      ? [['Datum', 'Mitarbeiter', 'Auftrag', 'Zeit', 'Stunden', 'Beschreibung']]
+      : [['Datum', 'Auftrag', 'Zeit', 'Stunden', 'Beschreibung']];
+    const tableBody = report.entries.map(entry => {
+      const common = [
+        format(parseISO(entry.date), 'dd.MM.yyyy'),
+        projectMap.get(entry.projectId) || 'Unbekannt',
+        `${entry.startTime?.substring(0, 5) || ''} - ${entry.endTime?.substring(0, 5) || ''}`,
+        `${(entry.durationMinutes / 60).toFixed(2)} h`,
+        entry.description || '-',
+      ];
+      return isAdmin
+        ? [common[0], userMap.get(entry.userId) || 'Unbekannt', ...common.slice(1)]
+        : common;
+    });
+
+    autoTable(document, {
+      startY: 60,
+      head: tableHead,
+      body: tableBody,
+      theme: 'grid',
+      styles: { font: 'helvetica', fontSize: 8, cellPadding: 2.5, textColor: [51, 65, 85], overflow: 'linebreak' },
+      headStyles: { fillColor: [37, 99, 235], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14, right: 14, bottom: 14 },
+    });
+
+    const pageCount = document.getNumberOfPages();
+    for (let page = 1; page <= pageCount; page += 1) {
+      document.setPage(page);
+      document.setFontSize(8);
+      document.setTextColor(148, 163, 184);
+      document.text(`Elektro Loidl - Seite ${page} von ${pageCount}`, 283, 202, { align: 'right' });
+    }
+    document.save(`arbeitszeitbericht-${startDate || 'beginn'}-${endDate || 'heute'}.pdf`);
+  };
+
   if (isLoading) return <div className="text-slate-500 animate-pulse font-medium">Lade Berichtsdaten...</div>;
 
   return (
@@ -126,9 +198,14 @@ export function ReportsView() {
             {isAdmin ? 'Arbeitszeiten projekt- und mitarbeiterübergreifend auswerten.' : 'Auswertung Ihrer persönlich erfassten Arbeitszeiten.'}
           </p>
         </div>
-        <button type="button" onClick={exportCsv} disabled={report.entries.length === 0 || invalidRange} className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-[14px] font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
-          <Download className="-ml-1 mr-2 h-4 w-4 text-slate-400" /> CSV exportieren
-        </button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button type="button" onClick={exportCsv} disabled={report.entries.length === 0 || invalidRange} className="inline-flex items-center justify-center rounded-lg bg-white px-4 py-2 text-[14px] font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
+            <Download className="-ml-1 mr-2 h-4 w-4 text-slate-400" /> CSV exportieren
+          </button>
+          <button type="button" onClick={exportPdf} disabled={report.entries.length === 0 || invalidRange} className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
+            <FileText className="-ml-1 mr-2 h-4 w-4" /> PDF exportieren
+          </button>
+        </div>
       </div>
 
       <section className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4" aria-labelledby="report-filter-heading">

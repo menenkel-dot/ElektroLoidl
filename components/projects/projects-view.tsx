@@ -2,10 +2,11 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Briefcase, Plus, Edit2 } from 'lucide-react';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Project } from '@/lib/mock-data';
+import toast from 'react-hot-toast';
 
 export function ProjectsView() {
   const queryClient = useQueryClient();
@@ -15,6 +16,28 @@ export function ProjectsView() {
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: allMembers } = useQuery({ queryKey: ['allProjectMembers'], queryFn: api.getAllProjectMembers });
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+  const isAdmin = currentUser?.role === 'admin';
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['allProjectMembers'] });
+      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['reportEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['assignments'] });
+      toast.success('Auftrag erfolgreich gelöscht');
+    },
+    onError: (error: Error) => toast.error(`Fehler beim Löschen: ${error.message}`),
+  });
+
+  const handleDelete = (project: Project) => {
+    const confirmed = confirm(
+      `Auftrag "${project.name}" wirklich unwiderruflich löschen? Zugehörige Einsätze, Arbeitszeiten, Materialien und Notizen werden ebenfalls gelöscht.`,
+    );
+    if (confirmed) deleteMutation.mutate(project.id);
+  };
 
   return (
     <div className="space-y-6">
@@ -50,9 +73,6 @@ export function ProjectsView() {
                       </span>
                       <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{project.name}</h3>
                     </div>
-                    <div className="p-2 rounded-lg bg-blue-50 text-blue-600">
-                      <Briefcase className="h-5 w-5" />
-                    </div>
                   </div>
 
                   {/* Team Avatars */}
@@ -83,18 +103,32 @@ export function ProjectsView() {
                   </div>
                 </div>
               </Link>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  setEditingProject(project);
-                  setIsModalOpen(true);
-                }}
-                className="responsive-card-actions absolute top-4 right-16 z-10 rounded-lg border border-slate-100 bg-white p-2 text-slate-400 shadow-sm transition-all hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900"
-                title="Bearbeiten"
-                aria-label={`${project.name} bearbeiten`}
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
+              {isAdmin && (
+                <div className="responsive-card-actions absolute top-4 right-4 z-10 flex items-center gap-1 rounded-lg border border-slate-100 bg-white p-0.5 shadow-sm transition-opacity dark:border-slate-700 dark:bg-slate-900">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingProject(project);
+                      setIsModalOpen(true);
+                    }}
+                    className="rounded-md p-2 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                    title="Bearbeiten"
+                    aria-label={`${project.name} bearbeiten`}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(project)}
+                    disabled={deleteMutation.isPending}
+                    className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                    title="Löschen"
+                    aria-label={`${project.name} löschen`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

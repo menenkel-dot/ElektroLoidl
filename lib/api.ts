@@ -89,6 +89,12 @@ export const api = {
     return data;
   },
 
+  deleteProject: async (id: string) => {
+    const { error } = await supabase.from('projects').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
   addProjectNote: async (projectId: string, text: string) => {
     const { data, error } = await supabase.from('project_notes').insert([{ project_id: projectId, text }]).select().single();
     if (error) throw error;
