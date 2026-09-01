@@ -8,6 +8,16 @@ import Link from 'next/link';
 import { Project } from '@/lib/mock-data';
 import toast from 'react-hot-toast';
 
+function getInitials(name: string) {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(part => part.charAt(0))
+    .join('')
+    .toUpperCase();
+}
+
 export function ProjectsView() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -76,19 +86,19 @@ export function ProjectsView() {
                   </div>
 
                   {/* Team Avatars */}
-                  <div className="mt-4 flex items-center gap-2">
-                    <div className="flex -space-x-2 overflow-hidden">
+                  <div className="mt-4 flex min-h-8 items-center gap-3">
+                    <div className="isolate flex shrink-0 items-center -space-x-2" aria-label="Zugewiesene Mitarbeiter">
                       {projectMembers.slice(0, 5).map((member) => (
                         <div 
                           key={member.id} 
-                          className="inline-block h-7 w-7 rounded-full ring-2 ring-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600"
+                          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white bg-slate-100 text-[10px] font-bold leading-none text-slate-600 shadow-sm dark:border-slate-900 dark:bg-slate-700 dark:text-slate-200"
                           title={member.user.name}
                         >
-                          {member.user.name.charAt(0)}
+                          {getInitials(member.user.name)}
                         </div>
                       ))}
                       {projectMembers.length > 5 && (
-                        <div className="inline-block h-7 w-7 rounded-full ring-2 ring-white bg-slate-50 flex items-center justify-center text-[10px] font-bold text-slate-400">
+                        <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white bg-slate-50 text-[10px] font-bold leading-none text-slate-500 shadow-sm dark:border-slate-900 dark:bg-slate-800 dark:text-slate-300" title={`${projectMembers.length - 5} weitere Mitarbeiter`}>
                           +{projectMembers.length - 5}
                         </div>
                       )}
@@ -96,8 +106,8 @@ export function ProjectsView() {
                     {projectMembers.length === 0 ? (
                       <span className="text-[12px] text-slate-400 italic">Kein Team zugewiesen</span>
                     ) : (
-                      <span className="text-[12px] text-slate-500 font-medium">
-                        {projectMembers.length} {projectMembers.length === 1 ? 'Mitarbeiter' : 'Mitarbeiter'}
+                      <span className="text-[12px] font-medium leading-4 text-slate-500">
+                        {projectMembers.length} Mitarbeiter
                       </span>
                     )}
                   </div>

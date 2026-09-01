@@ -277,7 +277,8 @@ export const api = {
       start_time: entry.startTime, 
       end_time: entry.endTime, 
       duration_minutes: Math.round(entry.durationMinutes), 
-      description: entry.description 
+      description: entry.description,
+      material_recorded_confirmed: entry.materialRecordedConfirmed === true,
     };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
     if (error) throw error;

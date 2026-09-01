@@ -112,6 +112,7 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
   const [endTime, setEndTime] = useState('16:00');
   const [pauseMinutes, setPauseMinutes] = useState('30');
   const [description, setDescription] = useState('');
+  const [materialRecordedConfirmed, setMaterialRecordedConfirmed] = useState(false);
 
   const targetUserId = selectedTargetUserId || currentUser?.id || '';
 
@@ -135,6 +136,11 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
     
     if (!targetUserId) {
       toast.error('Bitte wählen Sie einen Mitarbeiter aus.');
+      return;
+    }
+
+    if (!materialRecordedConfirmed) {
+      toast.error('Bitte bestätigen Sie, dass das benötigte Material erfasst wurde.');
       return;
     }
 
@@ -167,7 +173,8 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
       startTime,
       endTime,
       durationMinutes: diff,
-      description
+      description,
+      materialRecordedConfirmed,
     });
   };
 
@@ -261,8 +268,22 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
                 <textarea required rows={2} value={description} onChange={e => setDescription(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border" placeholder="Was wurde erledigt?" />
               </div>
 
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                <input
+                  type="checkbox"
+                  required
+                  checked={materialRecordedConfirmed}
+                  onChange={event => setMaterialRecordedConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-400 text-blue-600 focus:ring-blue-500"
+                />
+                <span>
+                  <span className="block font-semibold">Benötigtes Material erfasst</span>
+                  <span className="mt-0.5 block text-xs text-amber-800 dark:text-amber-200">Der Zeiteintrag kann erst nach dieser Bestätigung gespeichert werden.</span>
+                </span>
+              </label>
+
               <div className="pt-4 flex gap-3">
-                <button type="submit" disabled={addMutation.isPending} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                <button type="submit" disabled={addMutation.isPending || !materialRecordedConfirmed} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
                   {addMutation.isPending ? 'Speichert...' : 'Speichern'}
                 </button>
                 <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
