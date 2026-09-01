@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Plus, Clock, Coffee } from 'lucide-react';
+import { Plus, Clock, Coffee, Pencil, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -11,13 +11,35 @@ import toast from 'react-hot-toast';
 export function TimeTracker() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEntry, setEditingEntry] = useState<any>(null);
 
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+  const isAdmin = currentUser?.role === 'admin';
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: services } = useQuery({ queryKey: ['services'], queryFn: api.getServices });
   const { data: entries } = useQuery({ queryKey: ['timeEntries'], queryFn: () => api.getTimeEntries() });
-  const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
+  const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers, enabled: isAdmin });
+
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteTimeEntry,
+    onSuccess: () => {
+      toast.success('Zeiteintrag gelöscht');
+      queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+    },
+    onError: (error: any) => toast.error('Fehler beim Löschen: ' + error.message),
+  });
+
+  const openCreateModal = () => {
+    setEditingEntry(null);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm('Soll dieser Zeiteintrag wirklich gelöscht werden?')) {
+      deleteMutation.mutate(id);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -27,7 +49,7 @@ export function TimeTracker() {
           <p className="mt-1 text-sm text-gray-500">Ihre Arbeitszeiten dokumentieren und verwalten.</p>
         </div>
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openCreateModal}
           className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           <Plus className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
@@ -67,11 +89,36 @@ export function TimeTracker() {
                       )}
                     </div>
                   </div>
-                  <div className="text-left sm:text-right flex items-center justify-between sm:block border-t sm:border-0 border-gray-100 pt-3 sm:pt-0">
-                    <p className="text-lg font-light text-gray-900">{(entry.durationMinutes / 60).toFixed(2)} h</p>
-                    <p className="text-xs text-gray-500 sm:mt-1 font-mono">
-                      {format(parseISO(entry.date), 'dd.MM.', { locale: de })} &middot; {entry.startTime} - {entry.endTime}
-                    </p>
+                  <div className="flex items-center gap-3 border-t border-gray-100 pt-3 sm:border-0 sm:pt-0">
+                    <div className="text-left sm:text-right">
+                      <p className="text-lg font-light text-gray-900">{(entry.durationMinutes / 60).toFixed(2)} h</p>
+                      <p className="text-xs text-gray-500 sm:mt-1 font-mono">
+                        {format(parseISO(entry.date), 'dd.MM.', { locale: de })} &middot; {entry.startTime} - {entry.endTime}
+                      </p>
+                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingEntry(entry); setIsModalOpen(true); }}
+                          className="rounded-md p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                          title="Zeiteintrag bearbeiten"
+                          aria-label="Zeiteintrag bearbeiten"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(entry.id)}
+                          disabled={deleteMutation.isPending}
+                          className="rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          title="Zeiteintrag löschen"
+                          aria-label="Zeiteintrag löschen"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </li>
@@ -91,6 +138,7 @@ export function TimeTracker() {
           services={services || []}
           users={users || []}
           currentUser={currentUser}
+          entry={editingEntry}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
             queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -102,24 +150,27 @@ export function TimeTracker() {
   );
 }
 
-function EntryModal({ onClose, clients, projects, services, users, currentUser, onSuccess }: any) {
-  const [selectedTargetUserId, setSelectedTargetUserId] = useState('');
-  const [clientId, setClientId] = useState('');
-  const [projectId, setProjectId] = useState('');
-  const [serviceId, setServiceId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState('08:00');
-  const [endTime, setEndTime] = useState('16:00');
-  const [pauseMinutes, setPauseMinutes] = useState('30');
-  const [description, setDescription] = useState('');
-  const [materialRecordedConfirmed, setMaterialRecordedConfirmed] = useState(false);
+function EntryModal({ onClose, clients, projects, services, users, currentUser, entry, onSuccess }: any) {
+  const grossMinutes = entry
+    ? (new Date(`1970-01-01T${entry.endTime}:00`).getTime() - new Date(`1970-01-01T${entry.startTime}:00`).getTime()) / 60000
+    : 0;
+  const [selectedTargetUserId, setSelectedTargetUserId] = useState(entry?.userId || '');
+  const [clientId, setClientId] = useState(entry?.clientId || '');
+  const [projectId, setProjectId] = useState(entry?.projectId || '');
+  const [serviceId, setServiceId] = useState(entry?.serviceId || '');
+  const [date, setDate] = useState(entry?.date || new Date().toISOString().split('T')[0]);
+  const [startTime, setStartTime] = useState(entry?.startTime || '08:00');
+  const [endTime, setEndTime] = useState(entry?.endTime || '16:00');
+  const [pauseMinutes, setPauseMinutes] = useState(entry ? String(Math.max(0, grossMinutes - entry.durationMinutes)) : '30');
+  const [description, setDescription] = useState(entry?.description || '');
+  const [materialRecordedConfirmed, setMaterialRecordedConfirmed] = useState(Boolean(entry));
 
   const targetUserId = selectedTargetUserId || currentUser?.id || '';
 
-  const addMutation = useMutation({
-    mutationFn: api.addTimeEntry,
+  const saveMutation = useMutation({
+    mutationFn: (values: any) => entry ? api.updateTimeEntry(entry.id, values) : api.addTimeEntry(values),
     onSuccess: () => {
-      toast.success('Zeiteintrag erfolgreich gespeichert');
+      toast.success(entry ? 'Zeiteintrag aktualisiert' : 'Zeiteintrag erfolgreich gespeichert');
       onSuccess();
       onClose();
     },
@@ -164,7 +215,7 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
       return;
     }
 
-    addMutation.mutate({
+    saveMutation.mutate({
       userId: targetUserId,
       clientId,
       projectId,
@@ -187,7 +238,7 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
         <div className="flex min-h-full items-center justify-center p-4">
           <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
             <div className="px-6 py-4 border-b border-slate-100">
-               <h3 className="text-lg font-bold text-slate-900">Zeiteintrag erstellen</h3>
+               <h3 className="text-lg font-bold text-slate-900">{entry ? 'Zeiteintrag bearbeiten' : 'Zeiteintrag erstellen'}</h3>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               
@@ -283,8 +334,8 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
               </label>
 
               <div className="pt-4 flex gap-3">
-                <button type="submit" disabled={addMutation.isPending || !materialRecordedConfirmed} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
-                  {addMutation.isPending ? 'Speichert...' : 'Speichern'}
+                <button type="submit" disabled={saveMutation.isPending || !materialRecordedConfirmed} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
+                  {saveMutation.isPending ? 'Speichert...' : 'Speichern'}
                 </button>
                 <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
                   Abbrechen

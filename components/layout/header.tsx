@@ -4,9 +4,10 @@ import { useTheme } from 'next-themes';
 import { useSyncExternalStore } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import toast from 'react-hot-toast';
+import { useAuth } from '@/components/auth/auth-provider';
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { resolvedTheme, setTheme } = useTheme();
@@ -16,10 +17,13 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     () => false,
   );
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { session } = useAuth();
 
   const { data: userProfile } = useQuery({
-    queryKey: ['currentUser'],
+    queryKey: ['currentUser', session?.user.id],
     queryFn: api.getCurrentUser,
+    enabled: Boolean(session?.user.id),
   });
 
   const handleLogout = async () => {
@@ -27,6 +31,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
     if (error) {
       toast.error('Fehler beim Abmelden: ' + error.message);
     } else {
+      queryClient.clear();
       toast.success('Erfolgreich abgemeldet');
       router.push('/login');
     }

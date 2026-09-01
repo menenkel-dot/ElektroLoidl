@@ -276,10 +276,24 @@ export const api = {
   },
 
   addTimeEntry: async (entry: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Nicht authentifiziert');
+
+    const { data: ownProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (profileError) throw profileError;
+
+    // Mitarbeiter buchen immer auf ihre eigene Auth-ID. RLS bleibt die zweite Schutzschicht.
+    const targetUserId = ownProfile.role === 'admin' ? entry.userId : user.id;
+    if (!targetUserId) throw new Error('Bitte wählen Sie einen Mitarbeiter aus.');
+
     const { data: overlappingEntry, error: overlapError } = await supabase
       .from('time_entries')
       .select('id')
-      .eq('user_id', entry.userId)
+      .eq('user_id', targetUserId)
       .eq('date', entry.date)
       .lt('start_time', entry.endTime)
       .gt('end_time', entry.startTime)
@@ -291,7 +305,7 @@ export const api = {
     }
 
     const dbEntry = { 
-      user_id: entry.userId,
+      user_id: targetUserId,
       client_id: entry.clientId, 
       project_id: entry.projectId, 
       service_id: entry.serviceId || null, 
@@ -308,6 +322,32 @@ export const api = {
     }
     if (error) throw error;
     return data;
+  },
+
+  updateTimeEntry: async (id: string, entry: any) => {
+    const dbEntry = {
+      user_id: entry.userId,
+      client_id: entry.clientId,
+      project_id: entry.projectId,
+      service_id: entry.serviceId || null,
+      date: entry.date,
+      start_time: entry.startTime,
+      end_time: entry.endTime,
+      duration_minutes: Math.round(entry.durationMinutes),
+      description: entry.description,
+    };
+    const { data, error } = await supabase.from('time_entries').update(dbEntry).eq('id', id).select().single();
+    if (error?.code === '23P01') {
+      throw new Error('Für diesen Mitarbeiter besteht im gewählten Zeitraum bereits ein Zeiteintrag.');
+    }
+    if (error) throw error;
+    return data;
+  },
+
+  deleteTimeEntry: async (id: string) => {
+    const { error } = await supabase.from('time_entries').delete().eq('id', id);
+    if (error) throw error;
+    return true;
   },
 
   getAbsences: async () => {
@@ -353,6 +393,22 @@ export const api = {
     const { data, error } = await supabase.from('absences').update({ status }).eq('id', id).select().single();
     if (error) throw error;
     return data;
+  },
+
+  updateAbsence: async (id: string, absence: any) => {
+    const { data, error } = await supabase.from('absences').update({
+      type: absence.type,
+      start_date: absence.startDate,
+      end_date: absence.endDate,
+    }).eq('id', id).eq('status', 'pending').select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  deleteAbsence: async (id: string) => {
+    const { error } = await supabase.from('absences').delete().eq('id', id).eq('status', 'pending');
+    if (error) throw error;
+    return true;
   },
 
   getAssignments: async () => {
