@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { User, Mail, Plus, Shield, UserCircle, CheckCircle2, Clock, Calendar, Trash2 } from 'lucide-react';
+import { User, Mail, Plus, Shield, UserCircle, CheckCircle2, Clock, Calendar, Trash2, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -21,6 +21,7 @@ export function TeamView() {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [passwordUser, setPasswordUser] = useState<any>(null);
   const { data: users, isLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
 
@@ -120,7 +121,7 @@ export function TeamView() {
               </div>
             </div>
             {isAdmin && (
-              <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center">
+              <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex flex-wrap justify-between items-center gap-2">
                 <button 
                   onClick={() => handleDelete(user)}
                   className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -128,15 +129,24 @@ export function TeamView() {
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <button 
-                  onClick={() => {
-                    setEditingUser(user);
-                    setIsModalOpen(true);
-                  }}
-                  className="text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  Bearbeiten
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPasswordUser(user)}
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-white hover:text-blue-700"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" /> Passwort festlegen
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingUser(user);
+                      setIsModalOpen(true);
+                    }}
+                    className="text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    Bearbeiten
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -157,6 +167,90 @@ export function TeamView() {
           }}
         />
       )}
+
+      {passwordUser && (
+        <PasswordModal user={passwordUser} onClose={() => setPasswordUser(null)} />
+      )}
+    </div>
+  );
+}
+
+function PasswordModal({ user, onClose }: { user: any, onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+
+  const resetMutation = useMutation({
+    mutationFn: () => api.resetUserPassword(user.id, password),
+    onSuccess: () => {
+      toast.success(`Neues Passwort für ${user.name} wurde festgelegt`);
+      onClose();
+    },
+    onError: (error: Error) => toast.error(`Passwort konnte nicht geändert werden: ${error.message}`),
+  });
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (password.length < 8) {
+      toast.error('Das neue Passwort muss mindestens 8 Zeichen enthalten.');
+      return;
+    }
+    if (password !== passwordConfirmation) {
+      toast.error('Die eingegebenen Passwörter stimmen nicht überein.');
+      return;
+    }
+    resetMutation.mutate();
+  };
+
+  return (
+    <div className="relative z-50">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="fixed inset-0 z-10 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white text-left shadow-xl">
+            <div className="border-b border-slate-100 px-6 py-5">
+              <h3 className="text-[18px] font-bold leading-none text-slate-900">Neues Passwort festlegen</h3>
+              <p className="mt-2 text-[13px] text-slate-500">Für {user.name}</p>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-5 p-6">
+              <div>
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Neues Passwort</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[14px] shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                <p className="mt-1.5 text-[12px] text-slate-500">Mindestens 8 Zeichen.</p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">Passwort wiederholen</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  maxLength={128}
+                  autoComplete="new-password"
+                  value={passwordConfirmation}
+                  onChange={event => setPasswordConfirmation(event.target.value)}
+                  className="block w-full rounded-lg border border-slate-200 px-3 py-2.5 text-[14px] shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex gap-3 border-t border-slate-100 pt-4">
+                <button type="submit" disabled={resetMutation.isPending} className="flex-1 rounded-lg bg-blue-600 px-3 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:opacity-50">
+                  {resetMutation.isPending ? 'Wird gespeichert...' : 'Passwort speichern'}
+                </button>
+                <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
+                  Abbrechen
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

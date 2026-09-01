@@ -241,6 +241,14 @@ export const api = {
     return data;
   },
 
+  resetUserPassword: async (userId: string, password: string) => {
+    const { data, error } = await supabase.functions.invoke('reset-user-password', {
+      body: { userId, password },
+    });
+    if (error) throw error;
+    return data;
+  },
+
   getTimeEntries: async (filters: TimeEntryFilters = {}) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
