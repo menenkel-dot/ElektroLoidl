@@ -170,6 +170,23 @@ export const api = {
     return data;
   },
 
+  updateProjectNote: async (id: string, text: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Nicht authentifiziert');
+    const trimmedText = text.trim();
+    if (!trimmedText) throw new Error('Die Notiz darf nicht leer sein.');
+
+    const { data, error } = await supabase
+      .from('project_notes')
+      .update({ text: trimmedText })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select('id, text')
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
   addProjectImage: async (projectId: string, file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowedTypes.includes(file.type)) {

@@ -15,6 +15,7 @@ interface ProjectNote {
   text: string;
   createdAt: string;
   authorName: string;
+  userId: string | null;
 }
 
 interface ProjectImage {
@@ -42,6 +43,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newNote, setNewNote] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<ProjectMaterial | null>(null);
@@ -73,6 +76,17 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       setNewNote('');
       toast.success('Notiz hinzugefügt');
     }
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: ({ id, text }: { id: string; text: string }) => api.updateProjectNote(id, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      setEditingNoteId(null);
+      setEditingNoteText('');
+      toast.success('Notiz aktualisiert');
+    },
+    onError: (error: Error) => toast.error(`Notiz konnte nicht gespeichert werden: ${error.message}`),
   });
 
   const imageMutation = useMutation({
@@ -395,16 +409,71 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               ) : (
                 project.notes.map((note: ProjectNote) => (
                   <div key={note.id} className="p-6 hover:bg-slate-50/50 transition-colors">
-                    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-semibold text-slate-400">
-                      <span>{format(parseISO(note.createdAt), "dd. MMMM yyyy HH:mm", { locale: de })} Uhr</span>
-                      <span className="inline-flex items-center gap-1 text-slate-500">
-                        <UserRound className="h-3.5 w-3.5" />
-                        {note.authorName}
-                      </span>
+                    <div className="mb-2 flex items-start justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-semibold text-slate-400">
+                        <span>{format(parseISO(note.createdAt), "dd. MMMM yyyy HH:mm", { locale: de })} Uhr</span>
+                        <span className="inline-flex items-center gap-1 text-slate-500">
+                          <UserRound className="h-3.5 w-3.5" />
+                          {note.authorName}
+                        </span>
+                      </div>
+                      {note.userId === currentUser?.id && editingNoteId !== note.id && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingNoteId(note.id);
+                            setEditingNoteText(note.text);
+                          }}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                          aria-label="Eigene Notiz bearbeiten"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                          Bearbeiten
+                        </button>
+                      )}
                     </div>
-                    <div className="text-[14px] text-slate-800 whitespace-pre-wrap leading-relaxed">
-                      {note.text}
-                    </div>
+                    {editingNoteId === note.id ? (
+                      <form
+                        className="space-y-3"
+                        onSubmit={event => {
+                          event.preventDefault();
+                          if (editingNoteText.trim()) {
+                            updateNoteMutation.mutate({ id: note.id, text: editingNoteText });
+                          }
+                        }}
+                      >
+                        <textarea
+                          value={editingNoteText}
+                          onChange={event => setEditingNoteText(event.target.value)}
+                          className="min-h-[100px] w-full rounded-xl border border-slate-200 bg-white p-3 text-[14px] text-slate-800 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          aria-label="Notiz bearbeiten"
+                        />
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingNoteId(null);
+                              setEditingNoteText('');
+                            }}
+                            disabled={updateNoteMutation.isPending}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                          >
+                            Abbrechen
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={!editingNoteText.trim() || updateNoteMutation.isPending}
+                            className="rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {updateNoteMutation.isPending ? 'Speichert...' : 'Änderung speichern'}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="text-[14px] text-slate-800 whitespace-pre-wrap leading-relaxed">
+                        {note.text}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
