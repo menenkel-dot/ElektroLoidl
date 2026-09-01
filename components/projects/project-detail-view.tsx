@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -18,6 +18,7 @@ interface ProjectNote {
 interface ProjectImage {
   id: string;
   url: string;
+  storagePath?: string | null;
 }
 
 interface ProjectMaterial {
@@ -42,6 +43,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<ProjectMaterial | null>(null);
+  const [selectedImage, setSelectedImage] = useState<ProjectImage | null>(null);
   
   const { data: project, isLoading: projectLoading } = useQuery<Project>({ 
     queryKey: ['project', projectId], 
@@ -70,11 +72,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   });
 
   const imageMutation = useMutation({
-    mutationFn: (url: string) => api.addProjectImage(projectId, url),
+    mutationFn: (file: File) => api.addProjectImage(projectId, file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       toast.success('Bild hochgeladen');
-    }
+    },
+    onError: (error: Error) => toast.error(`Fehler beim Hochladen: ${error.message}`),
   });
 
   const removeMemberMutation = useMutation({
@@ -106,13 +109,34 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        imageMutation.mutate(event.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    imageMutation.mutate(file);
+    e.target.value = '';
+  };
+
+  const handleImageDownload = async (image: ProjectImage, index: number) => {
+    try {
+      const response = await fetch(image.url);
+      if (!response.ok) throw new Error('Das Bild konnte nicht geladen werden.');
+      const blob = await response.blob();
+      const extensionByType: Record<string, string> = {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif',
+      };
+      const extension = extensionByType[blob.type] || 'jpg';
+      const safeProjectName = project.name.replace(/[^a-z0-9äöüß_-]+/gi, '-').replace(/^-|-$/g, '') || 'auftrag';
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${safeProjectName}-bild-${index + 1}.${extension}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Fehler beim Herunterladen.');
+    }
   };
 
   const handleEditMaterial = (material: ProjectMaterial) => {
@@ -341,6 +365,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 disabled={imageMutation.isPending}
                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 title="Bild hochladen"
+                aria-label="Bild hochladen"
               >
                 <Upload className="w-5 h-5" />
               </button>
@@ -360,10 +385,29 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  {project.images.map((img: ProjectImage) => (
-                    <div key={img.id} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50 group">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img.url} alt="Auftragsbild" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                  {project.images.map((img: ProjectImage, index: number) => (
+                    <div key={img.id} className="group relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedImage(img)}
+                        className="h-full w-full cursor-zoom-in"
+                        aria-label={`Auftragsbild ${index + 1} vergrößern`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img.url} alt={`Auftragsbild ${index + 1}`} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                        <span className="absolute inset-0 flex items-center justify-center bg-slate-950/0 text-white transition-colors group-hover:bg-slate-950/25">
+                          <Maximize2 className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100" />
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleImageDownload(img, index)}
+                        className="absolute right-2 top-2 rounded-lg bg-white/95 p-2 text-slate-700 shadow-sm transition-colors hover:bg-blue-600 hover:text-white"
+                        title="Bild herunterladen"
+                        aria-label={`Auftragsbild ${index + 1} herunterladen`}
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -397,6 +441,39 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             setEditingMaterial(null);
           }}
         />
+      )}
+
+      {selectedImage && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/90 p-4" role="dialog" aria-modal="true" aria-label="Auftragsbild anzeigen">
+          <button
+            type="button"
+            onClick={() => setSelectedImage(null)}
+            className="absolute inset-0 cursor-zoom-out"
+            aria-label="Bildansicht schließen"
+          />
+          <div className="relative z-10 flex max-h-full max-w-6xl flex-col items-center gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={selectedImage.url} alt="Auftragsbild in Großansicht" className="max-h-[82vh] max-w-full rounded-xl object-contain shadow-2xl" />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleImageDownload(selectedImage, Math.max(0, project.images.findIndex(image => image.id === selectedImage.id)))}
+                className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-800 shadow-sm hover:bg-slate-100"
+              >
+                <Download className="h-4 w-4" />
+                Herunterladen
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 py-2.5 text-[14px] font-semibold text-white hover:bg-white/20"
+              >
+                <X className="h-4 w-4" />
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

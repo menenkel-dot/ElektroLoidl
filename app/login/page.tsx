@@ -12,9 +12,9 @@ export default function LoginPage() {
           <div className="mb-6">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
-              src="/logo.png" 
+              src="/logo_neu.png"
               alt="Elektro Loidl Logo"
-              className="h-12 w-auto object-contain dark:invert"
+              className="h-20 w-auto max-w-full rounded-md bg-white object-contain p-1"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.insertAdjacentHTML('afterend', '<div class="h-12 w-12 bg-blue-600 rounded-xl flex items-center justify-center"><span class="text-white font-bold text-xl">V</span></div>');

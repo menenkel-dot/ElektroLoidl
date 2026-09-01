@@ -64,12 +64,23 @@ export const api = {
     const { data: project, error: pError } = await supabase.from('projects').select('id, client_id, name').eq('id', id).single();
     if (pError) throw pError;
     const { data: notes } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
-    const { data: images } = await supabase.from('project_images').select('*').eq('project_id', id);
+    const { data: images, error: imagesError } = await supabase.from('project_images').select('*').eq('project_id', id).order('created_at', { ascending: false });
+    if (imagesError) throw imagesError;
+    const resolvedImages = await Promise.all((images || []).map(async image => {
+      const isDirectUrl = image.url.startsWith('data:') || image.url.startsWith('http://') || image.url.startsWith('https://');
+      if (isDirectUrl) return { ...image, storagePath: null };
+
+      const { data: signedUrl, error: signedUrlError } = await supabase.storage
+        .from('project-images')
+        .createSignedUrl(image.url, 60 * 60);
+      if (signedUrlError) throw signedUrlError;
+      return { ...image, url: signedUrl.signedUrl, storagePath: image.url };
+    }));
     return { 
       ...project, 
       clientId: project.client_id,
       notes: notes?.map(n => ({ id: n.id, text: n.text, createdAt: n.created_at })) || [], 
-      images: images || [] 
+      images: resolvedImages,
     };
   },
 
@@ -101,9 +112,36 @@ export const api = {
     return data;
   },
 
-  addProjectImage: async (projectId: string, url: string) => {
-    const { data, error } = await supabase.from('project_images').insert([{ project_id: projectId, url }]).select().single();
-    if (error) throw error;
+  addProjectImage: async (projectId: string, file: File) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Bitte wählen Sie ein Bild im Format JPG, PNG, WebP oder GIF aus.');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('Das Bild darf maximal 10 MB groß sein.');
+    }
+
+    const extensionByType: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+    };
+    const storagePath = `${projectId}/${crypto.randomUUID()}.${extensionByType[file.type]}`;
+    const { error: uploadError } = await supabase.storage
+      .from('project-images')
+      .upload(storagePath, file, { cacheControl: '3600', contentType: file.type, upsert: false });
+    if (uploadError) throw uploadError;
+
+    const { data, error } = await supabase
+      .from('project_images')
+      .insert([{ project_id: projectId, url: storagePath }])
+      .select()
+      .single();
+    if (error) {
+      await supabase.storage.from('project-images').remove([storagePath]);
+      throw error;
+    }
     return data;
   },
 

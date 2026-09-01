@@ -53,9 +53,9 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
           <div className="flex items-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
-              src="/logo.png" 
+              src="/logo_neu.png"
               alt="Firmenlogo" 
-              className="h-8 w-auto max-w-[160px] object-contain dark:invert"
+              className="h-12 w-auto max-w-[175px] rounded-md bg-white object-contain p-1"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.insertAdjacentHTML('afterend', '<div class="h-8 flex items-center text-[20px] font-extrabold text-slate-300 dark:text-slate-700">LOGO</div>');
