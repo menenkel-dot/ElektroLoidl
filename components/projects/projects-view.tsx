@@ -61,18 +61,20 @@ export function ProjectsView() {
       <div className="flex sm:items-center justify-between flex-col sm:flex-row gap-4 border-b border-gray-200 pb-5">
         <div>
           <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Aufträge</h2>
-          <p className="mt-2 text-[14px] text-slate-500">Kundenaufträge und zugewiesene Mitarbeiter verwalten.</p>
+          <p className="mt-2 text-[14px] text-slate-500">{isAdmin ? 'Kundenaufträge und zugewiesene Mitarbeiter verwalten.' : 'Kundenaufträge einsehen.'}</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingProject(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="-ml-1 mr-2 h-5 w-5" />
-          Neuer Auftrag
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setEditingProject(null);
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="-ml-1 mr-2 h-5 w-5" />
+            Neuer Auftrag
+          </button>
+        )}
       </div>
 
       <div className="relative max-w-xl">
@@ -168,7 +170,7 @@ export function ProjectsView() {
         )}
       </div>
 
-      {isModalOpen && (
+      {isAdmin && isModalOpen && (
         <ProjectModal 
           project={editingProject}
           onClose={() => {

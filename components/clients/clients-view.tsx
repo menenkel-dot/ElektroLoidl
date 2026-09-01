@@ -14,6 +14,8 @@ export function ClientsView() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const { data: clients, isLoading } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+  const isAdmin = currentUser?.role === 'admin';
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteClient,
@@ -41,18 +43,20 @@ export function ClientsView() {
       <div className="flex sm:items-center justify-between flex-col sm:flex-row gap-4 mb-2 border-b border-slate-200 pb-5">
         <div>
           <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Kunden</h2>
-          <p className="mt-2 text-[14px] text-slate-500">Kundenstamm verwalten und neue Kunden anlegen.</p>
+          <p className="mt-2 text-[14px] text-slate-500">{isAdmin ? 'Kundenstamm verwalten und neue Kunden anlegen.' : 'Kundendaten einsehen.'}</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingClient(null);
-            setIsModalOpen(true);
-          }}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="-ml-1 mr-2 h-5 w-5" />
-          Neuer Kunde
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => {
+              setEditingClient(null);
+              setIsModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="-ml-1 mr-2 h-5 w-5" />
+            Neuer Kunde
+          </button>
+        )}
       </div>
 
       <div className="relative max-w-xl">
@@ -94,31 +98,33 @@ export function ClientsView() {
                 </div>
               </div>
             </div>
-            <div className="responsive-card-actions absolute top-4 right-4 flex items-center gap-1 rounded-lg border border-slate-100 bg-white/90 p-0.5 shadow-sm transition-opacity dark:border-slate-700 dark:bg-slate-900/90">
-              <button
-                onClick={() => {
-                  setEditingClient(client);
-                  setIsModalOpen(true);
-                }}
-                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                title="Bearbeiten"
-                aria-label={`${client.name} bearbeiten`}
-              >
-                <Edit2 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => {
-                  if(confirm('Kunde wirklich löschen?')) {
-                    deleteMutation.mutate(client.id);
-                  }
-                }}
-                className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                title="Löschen"
-                aria-label={`${client.name} löschen`}
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="responsive-card-actions absolute top-4 right-4 flex items-center gap-1 rounded-lg border border-slate-100 bg-white/90 p-0.5 shadow-sm transition-opacity dark:border-slate-700 dark:bg-slate-900/90">
+                <button
+                  onClick={() => {
+                    setEditingClient(client);
+                    setIsModalOpen(true);
+                  }}
+                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Bearbeiten"
+                  aria-label={`${client.name} bearbeiten`}
+                >
+                  <Edit2 className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if(confirm('Kunde wirklich löschen?')) {
+                      deleteMutation.mutate(client.id);
+                    }
+                  }}
+                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  title="Löschen"
+                  aria-label={`${client.name} löschen`}
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </div>
         ))}
         {filteredClients?.length === 0 && (
@@ -128,7 +134,7 @@ export function ClientsView() {
         )}
       </div>
 
-      {isModalOpen && (
+      {isAdmin && isModalOpen && (
         <ClientModal 
           client={editingClient}
           onClose={() => {

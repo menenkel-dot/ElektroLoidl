@@ -25,6 +25,8 @@ export function ScheduleView() {
   const { data: assignments } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: api.getAbsences });
+  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+  const isAdmin = currentUser?.role === 'admin';
 
   const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 5 }).map((_, i) => addDays(startOfCurrentWeek, i));
@@ -63,6 +65,7 @@ export function ScheduleView() {
     : format(currentDate, 'MMMM yyyy', { locale: de });
 
   const handleOpenModal = (assignment: any = null) => {
+    if (!isAdmin) return;
     setEditingAssignment(assignment);
     setIsModalOpen(true);
   };
@@ -72,7 +75,7 @@ export function ScheduleView() {
       <div className="flex sm:items-center justify-between flex-col sm:flex-row gap-4 border-b border-gray-200 pb-5">
         <div>
           <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Einsatzplan</h2>
-          <p className="mt-2 text-[14px] text-slate-500">Mitarbeiter Aufträgen mit Uhrzeit zuweisen.</p>
+          <p className="mt-2 text-[14px] text-slate-500">{isAdmin ? 'Mitarbeiter Aufträgen mit Uhrzeit zuweisen.' : 'Geplante Einsätze einsehen.'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1" aria-label="Kalenderansicht auswählen">
@@ -107,14 +110,16 @@ export function ScheduleView() {
           <button type="button" onClick={() => setCurrentDate(new Date())} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-600 shadow-sm hover:bg-slate-50">
             Heute
           </button>
-          <button
-            type="button"
-            onClick={() => handleOpenModal()}
-            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-          >
-            <Plus className="-ml-1 mr-2 h-5 w-5" />
-            Zuweisen
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => handleOpenModal()}
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+            >
+              <Plus className="-ml-1 mr-2 h-5 w-5" />
+              Zuweisen
+            </button>
+          )}
         </div>
       </div>
 
@@ -169,8 +174,10 @@ export function ScheduleView() {
                         return (
                           <button 
                             key={asg.id} 
+                            type="button"
                             onClick={() => handleOpenModal(asg)}
-                            className="w-full text-left block bg-blue-50 border border-blue-200 rounded p-2 mb-2 text-xs text-blue-800 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                            disabled={!isAdmin}
+                            className={`mb-2 block w-full rounded border border-blue-200 bg-blue-50 p-2 text-left text-xs text-blue-800 shadow-sm transition-colors ${isAdmin ? 'cursor-pointer hover:border-blue-300 hover:bg-blue-100' : 'cursor-default'}`}
                           >
                             <div className="flex items-center gap-1 font-bold mb-1">
                               <Clock className="w-3 h-3" />
@@ -239,7 +246,8 @@ export function ScheduleView() {
                             key={assignment.id}
                             type="button"
                             onClick={() => handleOpenModal(assignment)}
-                            className="block w-full rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-left text-[10px] text-blue-900 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
+                            disabled={!isAdmin}
+                            className={`block w-full rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-left text-[10px] text-blue-900 shadow-sm transition-colors ${isAdmin ? 'hover:border-blue-300 hover:bg-blue-100' : 'cursor-default'}`}
                             title={`${user?.name || 'Mitarbeiter'} · ${project?.name || 'Auftrag'}`}
                           >
                             <span className="block truncate font-bold">{user?.name || 'Mitarbeiter'}</span>
@@ -261,7 +269,7 @@ export function ScheduleView() {
         </div>
       )}
 
-      {isModalOpen && (
+      {isAdmin && isModalOpen && (
         <AssignmentModal 
           assignment={editingAssignment}
           onClose={() => {
