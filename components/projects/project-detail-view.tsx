@@ -223,19 +223,21 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                           <td className="py-3 pl-2 font-medium text-slate-700">{item.name}</td>
                           <td className="py-3 text-slate-600">{item.quantity}</td>
                           <td className="py-3 text-right pr-2">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="responsive-card-actions flex items-center justify-end gap-1 transition-opacity">
                               <button 
                                 onClick={() => handleEditMaterial(item)}
-                                className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Bearbeiten"
+                                aria-label={`${item.name} bearbeiten`}
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
                               {isAdmin && (
                                 <button 
                                   onClick={() => { if(confirm('Material wirklich löschen?')) deleteMaterialMutation.mutate(item.id); }}
-                                  className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                  className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Löschen"
+                                  aria-label={`${item.name} löschen`}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>

@@ -75,7 +75,7 @@ export function ClientsView() {
                 </div>
               </div>
             </div>
-            <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="responsive-card-actions absolute top-4 right-4 flex items-center gap-1 rounded-lg border border-slate-100 bg-white/90 p-0.5 shadow-sm transition-opacity dark:border-slate-700 dark:bg-slate-900/90">
               <button
                 onClick={() => {
                   setEditingClient(client);
@@ -83,6 +83,7 @@ export function ClientsView() {
                 }}
                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                 title="Bearbeiten"
+                aria-label={`${client.name} bearbeiten`}
               >
                 <Edit2 className="w-5 h-5" />
               </button>
@@ -94,6 +95,7 @@ export function ClientsView() {
                 }}
                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                 title="Löschen"
+                aria-label={`${client.name} löschen`}
               >
                 <Trash2 className="w-5 h-5" />
               </button>

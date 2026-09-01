@@ -16,7 +16,7 @@ export function TimeTracker() {
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: services } = useQuery({ queryKey: ['services'], queryFn: api.getServices });
-  const { data: entries } = useQuery({ queryKey: ['timeEntries'], queryFn: api.getTimeEntries });
+  const { data: entries } = useQuery({ queryKey: ['timeEntries'], queryFn: () => api.getTimeEntries() });
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
 
   return (

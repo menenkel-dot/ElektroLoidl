@@ -1,5 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 
+type TimeEntryFilters = {
+  startDate?: string;
+  endDate?: string;
+  projectId?: string;
+  userId?: string;
+};
+
 export const api = {
   getClients: async () => {
     const { data, error } = await supabase.from('clients').select('*').order('name');
@@ -228,12 +235,16 @@ export const api = {
     return data;
   },
 
-  getTimeEntries: async () => {
+  getTimeEntries: async (filters: TimeEntryFilters = {}) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+
     let query = supabase.from('time_entries').select('*');
-    if (profile?.role !== 'admin') { query = query.eq('user_id', user.id); }
+    if (filters.startDate) query = query.gte('date', filters.startDate);
+    if (filters.endDate) query = query.lte('date', filters.endDate);
+    if (filters.projectId) query = query.eq('project_id', filters.projectId);
+    if (filters.userId) query = query.eq('user_id', filters.userId);
+
     const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: false });
     if (error) throw error;
     return data.map(e => ({

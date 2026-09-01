@@ -13,7 +13,7 @@ export function DashboardView() {
 
   const { data: entries, isLoading: entriesLoading } = useQuery({
     queryKey: ['timeEntries'],
-    queryFn: api.getTimeEntries,
+    queryFn: () => api.getTimeEntries(),
   });
 
   const { data: projects, isLoading: projectsLoading } = useQuery({

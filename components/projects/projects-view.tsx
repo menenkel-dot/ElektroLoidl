@@ -89,8 +89,9 @@ export function ProjectsView() {
                   setEditingProject(project);
                   setIsModalOpen(true);
                 }}
-                className="absolute top-4 right-16 p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-slate-100 z-10"
+                className="responsive-card-actions absolute top-4 right-16 z-10 rounded-lg border border-slate-100 bg-white p-2 text-slate-400 shadow-sm transition-all hover:bg-blue-50 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-900"
                 title="Bearbeiten"
+                aria-label={`${project.name} bearbeiten`}
               >
                 <Edit2 className="w-4 h-4" />
               </button>

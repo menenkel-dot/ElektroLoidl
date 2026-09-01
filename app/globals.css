@@ -2,6 +2,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.responsive-card-actions {
+  opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .group .responsive-card-actions {
+    opacity: 0;
+  }
+
+  .group:hover .responsive-card-actions,
+  .responsive-card-actions:focus-within {
+    opacity: 1;
+  }
+}
+
 :where(.dark) {
     color-scheme: dark;
   }
