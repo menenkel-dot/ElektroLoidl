@@ -13,7 +13,7 @@ export default function LoginPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/logo.png" 
-              alt="VoltTime Logo" 
+              alt="Elektro Loidl Logo"
               className="h-12 w-auto object-contain dark:invert"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';

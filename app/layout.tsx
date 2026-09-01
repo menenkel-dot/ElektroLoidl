@@ -8,13 +8,13 @@ import { PWARegister } from '@/components/pwa-register';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'VoltTime - Elektro Loidl',
+  title: 'Elektro Loidl',
   description: 'Zeiterfassung und Projektmanagement für Elektro Loidl',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'VoltTime',
+    title: 'Elektro Loidl',
   },
 };
 
