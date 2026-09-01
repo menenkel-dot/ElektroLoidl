@@ -63,7 +63,12 @@ export const api = {
   getProject: async (id: string) => {
     const { data: project, error: pError } = await supabase.from('projects').select('id, client_id, name').eq('id', id).single();
     if (pError) throw pError;
-    const { data: notes } = await supabase.from('project_notes').select('*').eq('project_id', id).order('created_at', { ascending: false });
+    const { data: notes, error: notesError } = await supabase
+      .from('project_notes')
+      .select('id, text, created_at, user_id, author:profiles!project_notes_user_id_fkey(first_name, last_name)')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false });
+    if (notesError) throw notesError;
     const { data: images, error: imagesError } = await supabase.from('project_images').select('*').eq('project_id', id).order('created_at', { ascending: false });
     if (imagesError) throw imagesError;
     const resolvedImages = await Promise.all((images || []).map(async image => {
@@ -79,7 +84,13 @@ export const api = {
     return { 
       ...project, 
       clientId: project.client_id,
-      notes: notes?.map(n => ({ id: n.id, text: n.text, createdAt: n.created_at })) || [], 
+      notes: notes?.map(n => {
+        const author = Array.isArray(n.author) ? n.author[0] : n.author;
+        const authorName = author
+          ? `${author.first_name || ''} ${author.last_name || ''}`.trim() || 'Mitarbeiter'
+          : 'Verfasser nicht verfügbar';
+        return { id: n.id, text: n.text, createdAt: n.created_at, userId: n.user_id, authorName };
+      }) || [],
       images: resolvedImages,
     };
   },
@@ -107,7 +118,13 @@ export const api = {
   },
 
   addProjectNote: async (projectId: string, text: string) => {
-    const { data, error } = await supabase.from('project_notes').insert([{ project_id: projectId, text }]).select().single();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Nicht authentifiziert');
+    const { data, error } = await supabase
+      .from('project_notes')
+      .insert([{ project_id: projectId, text, user_id: user.id }])
+      .select()
+      .single();
     if (error) throw error;
     return data;
   },

@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ interface ProjectNote {
   id: string;
   text: string;
   createdAt: string;
+  authorName: string;
 }
 
 interface ProjectImage {
@@ -340,8 +341,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               ) : (
                 project.notes.map((note: ProjectNote) => (
                   <div key={note.id} className="p-6 hover:bg-slate-50/50 transition-colors">
-                    <div className="text-[12px] font-semibold text-slate-400 mb-2">
-                      {format(parseISO(note.createdAt), "dd. MMMM yyyy HH:mm", { locale: de })} Uhr
+                    <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] font-semibold text-slate-400">
+                      <span>{format(parseISO(note.createdAt), "dd. MMMM yyyy HH:mm", { locale: de })} Uhr</span>
+                      <span className="inline-flex items-center gap-1 text-slate-500">
+                        <UserRound className="h-3.5 w-3.5" />
+                        {note.authorName}
+                      </span>
                     </div>
                     <div className="text-[14px] text-slate-800 whitespace-pre-wrap leading-relaxed">
                       {note.text}
