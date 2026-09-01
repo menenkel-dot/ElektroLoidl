@@ -1,10 +1,51 @@
 import { supabase } from '@/integrations/supabase/client';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 type TimeEntryFilters = {
   startDate?: string;
   endDate?: string;
   projectId?: string;
   userId?: string;
+};
+
+const translateFunctionError = (message: string) => {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('already') && (normalized.includes('registered') || normalized.includes('exists'))) {
+    return 'Für diese E-Mail-Adresse besteht bereits ein Benutzerkonto.';
+  }
+  if (normalized.includes('password') && normalized.includes('8')) {
+    return 'Das Passwort muss mindestens 8 Zeichen enthalten.';
+  }
+  if (normalized.includes('valid email')) {
+    return 'Bitte geben Sie eine gültige E-Mail-Adresse ein.';
+  }
+  if (normalized.includes('first and last name')) {
+    return 'Vorname und Nachname sind erforderlich.';
+  }
+  if (normalized.includes('administrator access required')) {
+    return 'Nur Administratoren dürfen neue Mitarbeiter anlegen.';
+  }
+  if (normalized.includes('authentication required') || normalized.includes('invalid or expired session')) {
+    return 'Ihre Anmeldung ist abgelaufen. Bitte melden Sie sich erneut an.';
+  }
+
+  return message;
+};
+
+const getFunctionErrorMessage = async (error: unknown) => {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json() as { error?: unknown };
+      if (typeof payload.error === 'string' && payload.error.trim()) {
+        return translateFunctionError(payload.error.trim());
+      }
+    } catch {
+      // Falls die Function keine JSON-Antwort liefert, verwenden wir die SDK-Meldung.
+    }
+  }
+
+  return error instanceof Error ? error.message : 'Die Anfrage konnte nicht verarbeitet werden.';
 };
 
 export const api = {
@@ -270,7 +311,7 @@ export const api = {
 
   createUser: async (userData: any) => {
     const { data, error } = await supabase.functions.invoke('create-user', { body: userData });
-    if (error) throw error;
+    if (error) throw new Error(await getFunctionErrorMessage(error));
     return data;
   },
 

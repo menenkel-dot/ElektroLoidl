@@ -293,6 +293,10 @@ function UserModal({ user, onClose, onSuccess }: { user?: any, onClose: () => vo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user && password.length < 8) {
+      toast.error('Das Passwort muss mindestens 8 Zeichen enthalten.');
+      return;
+    }
     const data = {
       firstName,
       lastName,
@@ -341,7 +345,8 @@ function UserModal({ user, onClose, onSuccess }: { user?: any, onClose: () => vo
                     </div>
                     <div>
                       <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Passwort</label>
-                      <input required type="password" value={password} onChange={e => setPassword(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="********" />
+                      <input required type="password" minLength={8} maxLength={128} autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" placeholder="Mindestens 8 Zeichen" />
+                      <p className="mt-1.5 text-[12px] text-slate-500">Mindestens 8 Zeichen.</p>
                     </div>
                   </>
                 )}
