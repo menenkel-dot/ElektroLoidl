@@ -49,20 +49,20 @@ export function Sidebar({ isOpen, onClose }: { isOpen?: boolean; onClose?: () =>
         flex w-[240px] flex-col bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 h-screen fixed inset-y-0 z-50 py-6 transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="px-6 pb-8 flex shrink-0 items-center justify-between">
-          <div className="flex items-center">
+        <div className="relative flex shrink-0 justify-center px-5 pb-7">
+          <div className="flex w-full justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src="/logo_neu.png"
               alt="Firmenlogo" 
-              className="h-12 w-auto max-w-[175px] rounded-md bg-white object-contain p-1"
+              className="h-auto w-full max-w-[190px] rounded-md bg-white object-contain"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.insertAdjacentHTML('afterend', '<div class="h-8 flex items-center text-[20px] font-extrabold text-slate-300 dark:text-slate-700">LOGO</div>');
               }}
             />
           </div>
-          <button onClick={onClose} className="lg:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md transition-colors">
+          <button onClick={onClose} className="absolute right-3 top-0 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-md transition-colors">
             <X className="w-6 h-6" />
           </button>
         </div>
