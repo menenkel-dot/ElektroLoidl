@@ -2,8 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { calculateCurrentOvertime } from '@/lib/overtime';
 import Link from 'next/link';
-import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO, eachDayOfInterval, isWeekend } from 'date-fns';
+import { format } from 'date-fns';
 
 export function DashboardView() {
   const { data: userProfile, isLoading: profileLoading } = useQuery({
@@ -23,7 +24,7 @@ export function DashboardView() {
 
   const { data: absences } = useQuery({
     queryKey: ['absences'],
-    queryFn: api.getAbsences,
+    queryFn: () => api.getAbsences(),
   });
 
   const isLoading = profileLoading || entriesLoading || projectsLoading;
@@ -32,10 +33,7 @@ export function DashboardView() {
     return <div className="text-slate-500">Lade Dashboard...</div>;
   }
 
-  // Aktueller Monat Zeitspanne
   const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
 
   // Heute Stats
   const todayStr = format(now, 'yyyy-MM-dd');
@@ -43,46 +41,12 @@ export function DashboardView() {
   const totalMinutesToday = todaysEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0);
   const hoursToday = (totalMinutesToday / 60).toFixed(1);
 
-  // Monat Ist-Stunden (Arbeitszeit)
-  const monthlyEntries = entries?.filter(e => {
-    const entryDate = parseISO(e.date);
-    return e.userId === userProfile?.id && isWithinInterval(entryDate, { start: monthStart, end: monthEnd });
-  }) || [];
-  const hoursWorkMonth = monthlyEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0) / 60;
-
-  // Das Monatssoll wird auf die tatsächlichen Arbeitstage des Monats verteilt.
-  const monthWorkDays = eachDayOfInterval({ start: monthStart, end: monthEnd }).filter(day => !isWeekend(day));
-  const dailyTargetHours = (userProfile?.targetHoursMonthly || 160) / monthWorkDays.length;
-  
-  const monthlyAbsences = absences?.filter(a => {
-    if (a.userId !== userProfile?.id || a.status !== 'approved') return false;
-    const start = parseISO(a.startDate);
-    const end = parseISO(a.endDate);
-    // Prüfen ob die Abwesenheit den aktuellen Monat überschneidet
-    return (start <= monthEnd && end >= monthStart);
-  }) || [];
-
-  let absenceHoursMonth = 0;
-  monthlyAbsences.forEach(absence => {
-    const start = parseISO(absence.startDate);
-    const end = parseISO(absence.endDate);
-    
-    // Nur Tage im aktuellen Monat zählen
-    const intervalStart = start < monthStart ? monthStart : start;
-    const intervalEnd = end > monthEnd ? monthEnd : end;
-    
-    const days = eachDayOfInterval({ start: intervalStart, end: intervalEnd });
-    const workDays = days.filter(day => !isWeekend(day) && day <= now).length;
-    
-    absenceHoursMonth += workDays * dailyTargetHours;
-  });
-
-  // Saldo bis heute statt Abzug des kompletten Monatssolls am Monatsanfang.
-  const totalEffectiveHours = hoursWorkMonth + absenceHoursMonth;
-  const elapsedTargetHours = monthWorkDays.filter(day => day <= now).length * dailyTargetHours;
-  const overtimeBase = userProfile?.overtimeBase || 0;
-  const hasMonthlyActivity = monthlyEntries.length > 0 || absenceHoursMonth > 0;
-  const overtimeValue = overtimeBase + (hasMonthlyActivity ? totalEffectiveHours - elapsedTargetHours : 0);
+  const { balance: overtimeValue, dailyTargetHours } = calculateCurrentOvertime(
+    userProfile,
+    entries || [],
+    absences || [],
+    now,
+  );
   const overtime = overtimeValue.toFixed(1);
   const overtimePrefix = Number(overtime) >= 0 ? '+' : '';
 

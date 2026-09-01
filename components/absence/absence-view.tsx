@@ -33,7 +33,7 @@ export function AbsenceView() {
   // Wir casten die Daten explizit auf unseren Typ
   const { data: absences, isLoading } = useQuery<Absence[]>({ 
     queryKey: ['absences'], 
-    queryFn: api.getAbsences as any 
+    queryFn: () => api.getAbsences(),
   });
   
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });

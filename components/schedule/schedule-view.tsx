@@ -24,7 +24,7 @@ export function ScheduleView() {
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: assignments } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
-  const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: api.getAbsences });
+  const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: () => api.getAbsences() });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
 

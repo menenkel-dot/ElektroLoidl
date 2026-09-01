@@ -8,6 +8,11 @@ type TimeEntryFilters = {
   userId?: string;
 };
 
+type AbsenceFilters = {
+  startDate?: string;
+  endDate?: string;
+};
+
 const translateFunctionError = (message: string) => {
   const normalized = message.toLowerCase();
 
@@ -463,13 +468,15 @@ export const api = {
     return true;
   },
 
-  getAbsences: async () => {
+  getAbsences: async (filters: AbsenceFilters = {}) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
     
     let query = supabase.from('absences').select('*');
+    if (filters.startDate) query = query.gte('end_date', filters.startDate);
+    if (filters.endDate) query = query.lte('start_date', filters.endDate);
     if (profile?.role !== 'admin') {
       query = query.eq('user_id', user.id);
     }
