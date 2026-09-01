@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History, Trash2 } from 'lucide-react';
-import { format, addDays, startOfWeek, parseISO, isWithinInterval } from 'date-fns';
+import { addDays, addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
@@ -17,6 +17,7 @@ const typeLabels = {
 export function ScheduleView() {
   const queryClient = useQueryClient();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAssignment, setEditingAssignment] = useState<any>(null);
 
@@ -26,7 +27,40 @@ export function ScheduleView() {
   const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: api.getAbsences });
 
   const startOfCurrentWeek = startOfWeek(currentDate, { weekStartsOn: 1 });
-  const days = Array.from({ length: 5 }).map((_, i) => addDays(startOfCurrentWeek, i));
+  const weekDays = Array.from({ length: 5 }).map((_, i) => addDays(startOfCurrentWeek, i));
+  const calendarDays = eachDayOfInterval({
+    start: startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 }),
+    end: endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 }),
+  });
+  const today = new Date();
+  const userMap = useMemo(() => new Map((users || []).map(user => [user.id, user])), [users]);
+  const projectMap = useMemo(() => new Map((projects || []).map(project => [project.id, project])), [projects]);
+
+  const assignmentsForDay = (day: Date, userId?: string) => (assignments || []).filter(assignment => {
+    if (userId && assignment.userId !== userId) return false;
+    return isWithinInterval(day, {
+      start: parseISO(assignment.startDate),
+      end: parseISO(assignment.endDate),
+    });
+  });
+
+  const absencesForDay = (day: Date, userId?: string) => (absences || []).filter(absence => {
+    if (absence.status !== 'approved' || (userId && absence.userId !== userId)) return false;
+    return isWithinInterval(day, {
+      start: parseISO(absence.startDate),
+      end: parseISO(absence.endDate),
+    });
+  });
+
+  const changePeriod = (direction: -1 | 1) => {
+    setCurrentDate(previous => viewMode === 'week'
+      ? addDays(previous, direction * 7)
+      : addMonths(previous, direction));
+  };
+
+  const periodLabel = viewMode === 'week'
+    ? `KW ${format(currentDate, 'I', { locale: de })} · ${format(weekDays[0], 'dd.MM.')} - ${format(weekDays[4], 'dd.MM.yyyy')}`
+    : format(currentDate, 'MMMM yyyy', { locale: de });
 
   const handleOpenModal = (assignment: any = null) => {
     setEditingAssignment(assignment);
@@ -40,21 +74,43 @@ export function ScheduleView() {
           <h2 className="text-[24px] font-bold text-slate-900 tracking-tight leading-none">Einsatzplan</h2>
           <p className="mt-2 text-[14px] text-slate-500">Mitarbeiter Aufträgen mit Uhrzeit zuweisen.</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center bg-white rounded-md shadow-sm border border-gray-200">
-            <button onClick={() => setCurrentDate(addDays(currentDate, -7))} className="p-2 text-gray-500 hover:text-gray-700">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1" aria-label="Kalenderansicht auswählen">
+            <button
+              type="button"
+              onClick={() => setViewMode('week')}
+              aria-pressed={viewMode === 'week'}
+              className={`rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors ${viewMode === 'week' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Woche
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('month')}
+              aria-pressed={viewMode === 'month'}
+              className={`rounded-md px-3 py-1.5 text-[13px] font-semibold transition-colors ${viewMode === 'month' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Monat
+            </button>
+          </div>
+          <div className="flex items-center rounded-lg border border-gray-200 bg-white shadow-sm">
+            <button type="button" onClick={() => changePeriod(-1)} className="p-2 text-gray-500 hover:text-gray-700" aria-label={viewMode === 'week' ? 'Vorherige Woche' : 'Vorheriger Monat'}>
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <span className="px-4 text-sm font-medium">
-              KW {format(currentDate, 'I', { locale: de })}
+            <span className="min-w-[190px] px-3 text-center text-[13px] font-semibold capitalize text-slate-700">
+              {periodLabel}
             </span>
-            <button onClick={() => setCurrentDate(addDays(currentDate, 7))} className="p-2 text-gray-500 hover:text-gray-700">
+            <button type="button" onClick={() => changePeriod(1)} className="p-2 text-gray-500 hover:text-gray-700" aria-label={viewMode === 'week' ? 'Nächste Woche' : 'Nächster Monat'}>
               <ChevronRight className="h-5 w-5" />
             </button>
           </div>
+          <button type="button" onClick={() => setCurrentDate(new Date())} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-600 shadow-sm hover:bg-slate-50">
+            Heute
+          </button>
           <button
+            type="button"
             onClick={() => handleOpenModal()}
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
           >
             <Plus className="-ml-1 mr-2 h-5 w-5" />
             Zuweisen
@@ -62,12 +118,13 @@ export function ScheduleView() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        <div className="min-w-[1000px]">
+      {viewMode === 'week' ? (
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="min-w-[1000px]">
           {/* Header Row */}
           <div className="grid grid-cols-6 border-b border-gray-200 bg-gray-50">
             <div className="p-4 border-r border-gray-200 font-semibold text-gray-900 text-sm">Mitarbeiter</div>
-            {days.map(day => (
+            {weekDays.map(day => (
               <div key={day.toISOString()} className="p-4 border-r border-gray-200 text-center">
                 <p className="text-xs text-gray-500 uppercase">{format(day, 'EEEE', { locale: de })}</p>
                 <p className="font-medium text-gray-900">{format(day, 'dd.MM.')}</p>
@@ -85,21 +142,9 @@ export function ScheduleView() {
                   </div>
                   <span className="text-sm font-medium text-gray-900">{user.name}</span>
                 </div>
-                {days.map(day => {
-                  const dayAssignments = assignments?.filter(a => {
-                    if (a.userId !== user.id) return false;
-                    return isWithinInterval(day, {
-                      start: parseISO(a.startDate),
-                      end: parseISO(a.endDate)
-                    });
-                  }) || [];
-                  
-                  const dayAbsences = absences?.filter(a => {
-                    if (a.userId !== user.id || a.status !== 'approved') return false;
-                    const start = parseISO(a.startDate);
-                    const end = parseISO(a.endDate);
-                    return isWithinInterval(day, { start, end });
-                  }) || [];
+                {weekDays.map(day => {
+                  const dayAssignments = assignmentsForDay(day, user.id);
+                  const dayAbsences = absencesForDay(day, user.id);
 
                   return (
                     <div key={day.toISOString()} className="p-2 border-r border-gray-200 relative min-h-[100px]">
@@ -144,7 +189,77 @@ export function ScheduleView() {
             ))}
           </div>
         </div>
-      </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="min-w-[980px]">
+            <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+              {['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'].map(dayName => (
+                <div key={dayName} className="border-r border-slate-200 px-3 py-3 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500 last:border-r-0">
+                  {dayName}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7">
+              {calendarDays.map((day, index) => {
+                const dayAssignments = assignmentsForDay(day);
+                const dayAbsences = absencesForDay(day);
+                const belongsToMonth = isSameMonth(day, currentDate);
+                const isToday = isSameDay(day, today);
+
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`min-h-[155px] border-slate-200 p-2 ${index % 7 === 6 ? '' : 'border-r'} ${index >= calendarDays.length - 7 ? '' : 'border-b'} ${belongsToMonth ? 'bg-white' : 'bg-slate-50/70'}`}
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${isToday ? 'bg-blue-600 text-white' : belongsToMonth ? 'text-slate-700' : 'text-slate-400'}`}>
+                        {format(day, 'd')}
+                      </span>
+                      {dayAssignments.length > 0 && (
+                        <span className="text-[10px] font-semibold text-slate-400">{dayAssignments.length} Einsatz{dayAssignments.length === 1 ? '' : 'e'}</span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      {dayAbsences.map(absence => {
+                        const style = typeLabels[absence.type as keyof typeof typeLabels] || typeLabels.vacation;
+                        const Icon = style.icon;
+                        return (
+                          <div key={absence.id} className={`flex items-center gap-1 rounded border px-1.5 py-1 text-[10px] font-bold ${style.color}`}>
+                            <Icon className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{userMap.get(absence.userId)?.name || 'Mitarbeiter'} · {style.label}</span>
+                          </div>
+                        );
+                      })}
+                      {dayAssignments.map(assignment => {
+                        const user = userMap.get(assignment.userId);
+                        const project = projectMap.get(assignment.projectId);
+                        return (
+                          <button
+                            key={assignment.id}
+                            type="button"
+                            onClick={() => handleOpenModal(assignment)}
+                            className="block w-full rounded border border-blue-200 bg-blue-50 px-2 py-1.5 text-left text-[10px] text-blue-900 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-100"
+                            title={`${user?.name || 'Mitarbeiter'} · ${project?.name || 'Auftrag'}`}
+                          >
+                            <span className="block truncate font-bold">{user?.name || 'Mitarbeiter'}</span>
+                            <span className="block truncate font-semibold">{project?.name || 'Unbekannter Auftrag'}</span>
+                            <span className="mt-0.5 flex items-center gap-1 text-blue-700">
+                              <Clock className="h-2.5 w-2.5" />
+                              {assignment.startTime ? assignment.startTime.substring(0, 5) : 'Ganztag'}
+                              {assignment.endTime && ` - ${assignment.endTime.substring(0, 5)}`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <AssignmentModal 

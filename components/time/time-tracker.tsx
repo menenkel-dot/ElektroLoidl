@@ -135,7 +135,6 @@ export function TimeTracker() {
           onClose={() => setIsModalOpen(false)} 
           clients={clients || []}
           projects={projects || []}
-          services={services || []}
           users={users || []}
           currentUser={currentUser}
           entry={editingEntry}
@@ -150,14 +149,13 @@ export function TimeTracker() {
   );
 }
 
-function EntryModal({ onClose, clients, projects, services, users, currentUser, entry, onSuccess }: any) {
+function EntryModal({ onClose, clients, projects, users, currentUser, entry, onSuccess }: any) {
   const grossMinutes = entry
     ? (new Date(`1970-01-01T${entry.endTime}:00`).getTime() - new Date(`1970-01-01T${entry.startTime}:00`).getTime()) / 60000
     : 0;
   const [selectedTargetUserId, setSelectedTargetUserId] = useState(entry?.userId || '');
   const [clientId, setClientId] = useState(entry?.clientId || '');
   const [projectId, setProjectId] = useState(entry?.projectId || '');
-  const [serviceId, setServiceId] = useState(entry?.serviceId || '');
   const [date, setDate] = useState(entry?.date || new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState(entry?.startTime || '08:00');
   const [endTime, setEndTime] = useState(entry?.endTime || '16:00');
@@ -180,7 +178,6 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
   });
 
   const availableProjects = projects.filter((p: any) => p.clientId === clientId);
-  const availableServices = services.filter((s: any) => s.projectId === projectId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,7 +216,7 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
       userId: targetUserId,
       clientId,
       projectId,
-      serviceId: serviceId || null,
+      serviceId: entry?.serviceId || null,
       date,
       startTime,
       endTime,
@@ -255,26 +252,18 @@ function EntryModal({ onClose, clients, projects, services, users, currentUser, 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kunde</label>
-                  <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
+                  <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
                     <option value="">Bitte wählen...</option>
                     {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Auftrag</label>
-                  <select required disabled={!clientId} value={projectId} onChange={e => { setProjectId(e.target.value); setServiceId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
+                  <select required disabled={!clientId} value={projectId} onChange={e => setProjectId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
                     <option value="">Bitte wählen...</option>
                     {availableProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Leistung (optional)</label>
-                <select disabled={!projectId} value={serviceId} onChange={e => setServiceId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
-                  <option value="">Keine spezielle Leistung</option>
-                  {availableServices.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
