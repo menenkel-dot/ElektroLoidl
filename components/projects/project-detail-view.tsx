@@ -2,9 +2,10 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { exportProjectPdf } from '@/lib/project-pdf';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -45,13 +46,14 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<ProjectMaterial | null>(null);
   const [selectedImage, setSelectedImage] = useState<ProjectImage | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   
   const { data: project, isLoading: projectLoading } = useQuery<Project>({ 
     queryKey: ['project', projectId], 
     queryFn: () => api.getProject(projectId) as Promise<Project>
   });
   
-  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
+  const { data: clients, isLoading: clientsLoading } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: members, isLoading: membersLoading } = useQuery({ 
     queryKey: ['projectMembers', projectId], 
     queryFn: () => api.getProjectMembers(projectId) 
@@ -60,7 +62,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     queryKey: ['projectMaterials', projectId], 
     queryFn: () => api.getProjectMaterials(projectId) as Promise<ProjectMaterial[]>
   });
-  const { data: allUsers } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
+  const { data: allUsers, isLoading: usersLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
+  const { data: assignments, isLoading: assignmentsLoading } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
 
   const noteMutation = useMutation({
@@ -103,6 +106,8 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const client = clients?.find(c => c.id === project.clientId);
   const isAdmin = currentUser?.role === 'admin';
   const clientAddress = client?.address?.trim();
+  const contactPerson = client?.contactPerson?.trim();
+  const clientPhone = client?.phone?.trim();
   const directionsUrl = clientAddress
     ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(clientAddress)}`
     : null;
@@ -145,6 +150,30 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     setIsMaterialModalOpen(true);
   };
 
+  const handleProjectPdfExport = async () => {
+    setIsExportingPdf(true);
+    try {
+      const result = await exportProjectPdf({
+        project,
+        client,
+        members: members || [],
+        materials: materials || [],
+        assignments: (assignments || []).filter(assignment => assignment.projectId === projectId),
+        userNames: new Map((allUsers || []).map(user => [user.id, user.name])),
+        createdBy: currentUser?.name,
+      });
+      if (result.skippedImages) {
+        toast(`PDF erstellt. ${result.skippedImages} Bild(er) konnten nicht eingebettet werden.`);
+      } else {
+        toast.success('Auftrags-PDF erstellt');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'PDF konnte nicht erstellt werden.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -163,28 +192,53 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
                 <span>{clientAddress || 'Keine Adresse hinterlegt'}</span>
               </div>
+              <div className="mt-2 flex items-start gap-2 text-[14px] text-slate-600">
+                <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <span>{contactPerson || 'Kein Ansprechpartner hinterlegt'}</span>
+              </div>
+              <div className="mt-2 flex items-start gap-2 text-[14px] text-slate-600">
+                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                {clientPhone ? (
+                  <a href={`tel:${clientPhone}`} className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                    {clientPhone}
+                  </a>
+                ) : (
+                  <span>Keine Telefonnummer hinterlegt</span>
+                )}
+              </div>
             </div>
-            {directionsUrl ? (
-              <a
-                href={directionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
-              >
-                <Navigation className="h-4 w-4" />
-                Anfahrt
-              </a>
-            ) : (
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
-                disabled
-                title="Für diesen Kunden ist keine Adresse hinterlegt."
-                className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2.5 text-[14px] font-semibold text-slate-500"
+                onClick={handleProjectPdfExport}
+                disabled={isExportingPdf || clientsLoading || membersLoading || materialsLoading || usersLoading || assignmentsLoading}
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60"
               >
-                <Navigation className="h-4 w-4" />
-                Anfahrt
+                <FileDown className="h-4 w-4" />
+                {isExportingPdf ? 'PDF wird erstellt...' : 'Auftrag als PDF'}
               </button>
-            )}
+              {directionsUrl ? (
+                <a
+                  href={directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Anfahrt
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  title="Für diesen Kunden ist keine Adresse hinterlegt."
+                  className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-slate-200 px-4 py-2.5 text-[14px] font-semibold text-slate-500"
+                >
+                  <Navigation className="h-4 w-4" />
+                  Anfahrt
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
