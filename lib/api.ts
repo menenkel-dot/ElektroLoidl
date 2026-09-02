@@ -497,8 +497,18 @@ export const api = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Nicht authentifiziert");
 
+    const { data: ownProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (profileError) throw profileError;
+
+    const targetUserId = ownProfile.role === 'admin' ? absence.userId : user.id;
+    if (!targetUserId) throw new Error('Bitte wählen Sie einen Mitarbeiter aus.');
+
     const dbAbsence = { 
-      user_id: user.id,
+      user_id: targetUserId,
       type: absence.type, 
       start_date: absence.startDate, 
       end_date: absence.endDate,

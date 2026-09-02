@@ -19,6 +19,12 @@ interface Absence {
   status: 'pending' | 'approved' | 'rejected';
 }
 
+interface AbsenceUser {
+  id: string;
+  name: string;
+  role: string;
+}
+
 const typeLabels: Record<AbsenceType, string> = {
   vacation: 'Urlaub',
   sick: 'Krankheit',
@@ -89,7 +95,7 @@ export function AbsenceView() {
           className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 transition-colors"
         >
           <Plus className="-ml-1 mr-2 h-5 w-5" />
-          Antrag stellen
+          {isAdmin ? 'Abwesenheit eintragen' : 'Antrag stellen'}
         </button>
       </div>
 
@@ -187,6 +193,8 @@ export function AbsenceView() {
         <AbsenceModal 
           onClose={() => setIsModalOpen(false)} 
           absence={editingAbsence}
+          currentUser={currentUser}
+          users={users || []}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['absences'] });
             setIsModalOpen(false);
@@ -197,10 +205,25 @@ export function AbsenceView() {
   );
 }
 
-function AbsenceModal({ onClose, onSuccess, absence }: { onClose: () => void, onSuccess: () => void, absence: Absence | null }) {
+function AbsenceModal({ onClose, onSuccess, absence, currentUser, users }: {
+  onClose: () => void;
+  onSuccess: () => void;
+  absence: Absence | null;
+  currentUser: AbsenceUser | undefined;
+  users: AbsenceUser[];
+}) {
   const [type, setType] = useState<AbsenceType>(absence?.type || 'vacation');
   const [startDate, setStartDate] = useState(absence?.startDate || new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(absence?.endDate || new Date().toISOString().split('T')[0]);
+  const [userId, setUserId] = useState(absence?.userId || currentUser?.id || '');
+  const isAdmin = currentUser?.role === 'admin';
+  const selectableUsers = users
+    .filter(user => user.role === 'employee' || user.id === currentUser?.id)
+    .sort((a, b) => {
+      if (a.id === currentUser?.id) return -1;
+      if (b.id === currentUser?.id) return 1;
+      return a.name.localeCompare(b.name, 'de');
+    });
 
   const saveMutation = useMutation({
     mutationFn: (values: any) => absence ? api.updateAbsence(absence.id, values) : api.addAbsence(values),
@@ -219,7 +242,11 @@ function AbsenceModal({ onClose, onSuccess, absence }: { onClose: () => void, on
       toast.error('Das Enddatum muss nach dem Startdatum liegen.');
       return;
     }
-    saveMutation.mutate({ type, startDate, endDate });
+    if (!absence && isAdmin && !userId) {
+      toast.error('Bitte wählen Sie einen Mitarbeiter aus.');
+      return;
+    }
+    saveMutation.mutate({ userId, type, startDate, endDate });
   };
 
   return (
@@ -229,9 +256,31 @@ function AbsenceModal({ onClose, onSuccess, absence }: { onClose: () => void, on
         <div className="flex min-h-full items-center justify-center p-4 text-center">
           <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
             <div className="px-6 py-4 border-b border-slate-100">
-               <h3 className="text-lg font-bold text-slate-900">{absence ? 'Abwesenheitsantrag bearbeiten' : 'Abwesenheitsantrag'}</h3>
+               <h3 className="text-lg font-bold text-slate-900">
+                 {absence ? 'Abwesenheitsantrag bearbeiten' : isAdmin ? 'Abwesenheit eintragen' : 'Abwesenheitsantrag'}
+               </h3>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {!absence && isAdmin && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="absence-user">Mitarbeiter</label>
+                  <select
+                    id="absence-user"
+                    required
+                    value={userId}
+                    onChange={event => setUserId(event.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white"
+                  >
+                    {selectableUsers.map(user => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}{user.id === currentUser?.id ? ' (Ich)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-slate-500">Der Eintrag wird zunächst als ausstehend gespeichert.</p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Typ</label>
                 <select 
@@ -258,7 +307,13 @@ function AbsenceModal({ onClose, onSuccess, absence }: { onClose: () => void, on
 
               <div className="pt-4 flex gap-3">
                 <button type="submit" disabled={saveMutation.isPending} className="flex-1 justify-center rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {saveMutation.isPending ? 'Wird gespeichert...' : absence ? 'Änderungen speichern' : 'Antrag stellen'}
+                  {saveMutation.isPending
+                    ? 'Wird gespeichert...'
+                    : absence
+                      ? 'Änderungen speichern'
+                      : isAdmin
+                        ? 'Abwesenheit eintragen'
+                        : 'Antrag stellen'}
                 </button>
                 <button type="button" onClick={onClose} className="flex-1 justify-center rounded-lg bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm border border-slate-200 hover:bg-slate-50 transition-colors">
                   Abbrechen
