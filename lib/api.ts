@@ -526,7 +526,7 @@ export const api = {
   },
 
   deleteAbsence: async (id: string) => {
-    const { error } = await supabase.from('absences').delete().eq('id', id).eq('status', 'pending');
+    const { error } = await supabase.from('absences').delete().eq('id', id).select('id').single();
     if (error) throw error;
     return true;
   },

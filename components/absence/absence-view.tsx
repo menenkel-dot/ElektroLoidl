@@ -45,6 +45,8 @@ export function AbsenceView() {
     onSuccess: () => {
       toast.success('Status aktualisiert');
       queryClient.invalidateQueries({ queryKey: ['absences'] });
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
   });
 
@@ -53,6 +55,8 @@ export function AbsenceView() {
     onSuccess: () => {
       toast.success('Abwesenheitsantrag gelöscht');
       queryClient.invalidateQueries({ queryKey: ['absences'] });
+      queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (error: any) => toast.error('Fehler beim Löschen: ' + error.message),
   });
@@ -62,9 +66,12 @@ export function AbsenceView() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    if (window.confirm('Soll dieser offene Abwesenheitsantrag wirklich gelöscht werden?')) {
-      deleteMutation.mutate(id);
+  const handleDelete = (absence: Absence) => {
+    const balanceNote = absence.status === 'approved'
+      ? ' Bereits verrechnete Kontingente werden automatisch zurückgebucht.'
+      : '';
+    if (window.confirm(`Soll diese Abwesenheit wirklich gelöscht werden?${balanceNote}`)) {
+      deleteMutation.mutate(absence.id);
     }
   };
 
@@ -92,6 +99,7 @@ export function AbsenceView() {
             const user = users?.find(u => u.id === absence.userId);
             const userName = user?.name || (absence.userId === currentUser?.id ? currentUser.name : 'Unbekannt');
             const canEditPending = absence.status === 'pending' && (isAdmin || absence.userId === currentUser?.id);
+            const canDelete = isAdmin || (absence.status === 'pending' && absence.userId === currentUser?.id);
             const label = typeLabels[absence.type] || absence.type;
             
             return (
@@ -119,27 +127,31 @@ export function AbsenceView() {
                       {absence.status === 'approved' ? 'Genehmigt' :
                        absence.status === 'rejected' ? 'Abgelehnt' : 'Ausstehend'}
                     </span>
-                    {canEditPending && (
+                    {(canEditPending || canDelete) && (
                       <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => { setEditingAbsence(absence); setIsModalOpen(true); }}
-                          className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
-                          title="Antrag bearbeiten"
-                          aria-label="Antrag bearbeiten"
-                        >
-                          <Pencil className="h-5 w-5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(absence.id)}
-                          disabled={deleteMutation.isPending}
-                          className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                          title="Antrag löschen"
-                          aria-label="Antrag löschen"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
+                        {canEditPending && (
+                          <button
+                            type="button"
+                            onClick={() => { setEditingAbsence(absence); setIsModalOpen(true); }}
+                            className="rounded p-1 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
+                            title="Antrag bearbeiten"
+                            aria-label="Antrag bearbeiten"
+                          >
+                            <Pencil className="h-5 w-5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(absence)}
+                            disabled={deleteMutation.isPending}
+                            className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                            title="Abwesenheit löschen"
+                            aria-label="Abwesenheit löschen"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     )}
                     {isAdmin && absence.status === 'pending' && (
