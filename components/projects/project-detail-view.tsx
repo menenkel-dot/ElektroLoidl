@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { exportProjectPdf } from '@/lib/project-pdf';
 import { ProjectTimeSummary } from './project-time-summary';
-import { useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -29,8 +29,18 @@ interface ProjectMaterial {
   id: string;
   name: string;
   quantity: string;
+  categoryId: string | null;
+  categoryName: string | null;
   createdAt: string;
 }
+
+interface MaterialCategory {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+const UNCATEGORIZED_ID = 'uncategorized';
 
 interface Project {
   id: string;
@@ -48,7 +58,17 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [editingNoteText, setEditingNoteText] = useState('');
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<ProjectMaterial | null>(null);
+  const [expandedMaterialGroups, setExpandedMaterialGroups] = useState<Record<string, boolean>>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = window.localStorage.getItem(`material-groups:${projectId}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
   const [selectedImage, setSelectedImage] = useState<ProjectImage | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   
@@ -65,6 +85,10 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const { data: materials, isLoading: materialsLoading } = useQuery<ProjectMaterial[]>({ 
     queryKey: ['projectMaterials', projectId], 
     queryFn: () => api.getProjectMaterials(projectId) as Promise<ProjectMaterial[]>
+  });
+  const { data: materialCategories = [], isLoading: categoriesLoading } = useQuery<MaterialCategory[]>({
+    queryKey: ['materialCategories'],
+    queryFn: () => api.getMaterialCategories() as Promise<MaterialCategory[]>,
   });
   const { data: allUsers, isLoading: usersLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: assignments, isLoading: assignmentsLoading } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
@@ -116,6 +140,35 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       toast.success('Material entfernt');
     }
   });
+
+  const materialGroups = useMemo(() => {
+    const grouped = new Map<string, ProjectMaterial[]>();
+    (materials || []).forEach(material => {
+      const groupId = material.categoryId || UNCATEGORIZED_ID;
+      grouped.set(groupId, [...(grouped.get(groupId) || []), material]);
+    });
+
+    const categoryGroups = materialCategories
+      .filter(category => grouped.has(category.id))
+      .map(category => ({ id: category.id, name: category.name, materials: grouped.get(category.id) || [] }));
+    const uncategorized = grouped.get(UNCATEGORIZED_ID);
+    if (uncategorized?.length) {
+      categoryGroups.push({ id: UNCATEGORIZED_ID, name: 'Ohne Kategorie', materials: uncategorized });
+    }
+    return categoryGroups;
+  }, [materialCategories, materials]);
+
+  useEffect(() => {
+    window.localStorage.setItem(`material-groups:${projectId}`, JSON.stringify(expandedMaterialGroups));
+  }, [expandedMaterialGroups, projectId]);
+
+  const setAllMaterialGroups = (expanded: boolean) => {
+    setExpandedMaterialGroups(Object.fromEntries(materialGroups.map(group => [group.id, expanded])));
+  };
+
+  const toggleMaterialGroup = (groupId: string) => {
+    setExpandedMaterialGroups(current => ({ ...current, [groupId]: !(current[groupId] ?? true) }));
+  };
 
   if (projectLoading) return <div className="text-slate-500">Lade Auftrag...</div>;
   if (!project) return <div className="text-red-500">Auftrag nicht gefunden.</div>;
@@ -270,7 +323,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <h3 className="text-[16px] font-bold text-slate-900 leading-none">Projekt-Team</h3>
               </div>
               {isAdmin && (
-                <button 
+                <button
                   onClick={() => setIsMemberModalOpen(true)}
                   className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
                 >
@@ -313,21 +366,34 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
 
           {/* Material Sektion */}
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <div className="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Package className="w-5 h-5 text-slate-400" />
                 <h3 className="text-[16px] font-bold text-slate-900 leading-none">Materialliste</h3>
               </div>
-              <button 
-                onClick={() => { setEditingMaterial(null); setIsMaterialModalOpen(true); }}
-                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Material hinzufügen
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-600 hover:text-blue-700 transition-colors"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                    Kategorien verwalten
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setEditingMaterial(null); setIsMaterialModalOpen(true); }}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Material hinzufügen
+                </button>
+              </div>
             </div>
             <div className="p-6">
-              {materialsLoading ? (
+              {materialsLoading || categoriesLoading ? (
                 <div className="text-slate-400 text-sm">Lade Material...</div>
               ) : !materials || materials.length === 0 ? (
                 <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200">
@@ -335,46 +401,85 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                   <p className="text-[13px] text-slate-500">Noch kein Material erfasst</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[14px]">
-                    <thead>
-                      <tr className="text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-100">
-                        <th className="pb-3 pl-2">Bezeichnung</th>
-                        <th className="pb-3">Anzahl</th>
-                        <th className="pb-3 text-right pr-2">Aktionen</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {materials.map((item) => (
-                        <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
-                          <td className="py-3 pl-2 font-medium text-slate-700">{item.name}</td>
-                          <td className="py-3 text-slate-600">{item.quantity}</td>
-                          <td className="py-3 text-right pr-2">
-                            <div className="responsive-card-actions flex items-center justify-end gap-1 transition-opacity">
-                              <button 
-                                onClick={() => handleEditMaterial(item)}
-                                className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Bearbeiten"
-                                aria-label={`${item.name} bearbeiten`}
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              {isAdmin && (
-                                <button 
-                                  onClick={() => { if(confirm('Material wirklich löschen?')) deleteMaterialMutation.mutate(item.id); }}
-                                  className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Löschen"
-                                  aria-label={`${item.name} löschen`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {materialGroups.length > 1 && (
+                    <div className="flex justify-end gap-3 text-[12px] font-semibold">
+                      <button type="button" onClick={() => setAllMaterialGroups(true)} className="text-blue-600 hover:text-blue-700">
+                        Alle öffnen
+                      </button>
+                      <button type="button" onClick={() => setAllMaterialGroups(false)} className="text-slate-500 hover:text-slate-700">
+                        Alle schließen
+                      </button>
+                    </div>
+                  )}
+                  {materialGroups.map(group => {
+                    const isExpanded = expandedMaterialGroups[group.id] ?? true;
+                    const regionId = `material-group-${group.id}`;
+                    return (
+                      <section key={group.id} className="overflow-hidden rounded-xl border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => toggleMaterialGroup(group.id)}
+                          aria-expanded={isExpanded}
+                          aria-controls={regionId}
+                          className="flex w-full items-center justify-between gap-3 bg-slate-50 px-4 py-3 text-left hover:bg-slate-100 transition-colors"
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            {isExpanded ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />}
+                            <span className="truncate text-[14px] font-bold text-slate-800">{group.name}</span>
+                          </span>
+                          <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 border border-slate-200">
+                            {group.materials.length} {group.materials.length === 1 ? 'Eintrag' : 'Einträge'}
+                          </span>
+                        </button>
+                        {isExpanded && (
+                          <div id={regionId} className="overflow-x-auto">
+                            <table className="w-full text-left text-[14px]">
+                              <thead>
+                                <tr className="text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-100">
+                                  <th className="px-4 py-3">Bezeichnung</th>
+                                  <th className="py-3">Anzahl</th>
+                                  <th className="py-3 text-right pr-4">Aktionen</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50">
+                                {group.materials.map(item => (
+                                  <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
+                                    <td className="py-3 pl-4 pr-3 font-medium text-slate-700">{item.name}</td>
+                                    <td className="py-3 pr-3 text-slate-600">{item.quantity}</td>
+                                    <td className="py-3 text-right pr-4">
+                                      <div className="responsive-card-actions flex items-center justify-end gap-1 transition-opacity">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleEditMaterial(item)}
+                                          className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                          title="Bearbeiten"
+                                          aria-label={`${item.name} bearbeiten`}
+                                        >
+                                          <Edit2 className="w-4 h-4" />
+                                        </button>
+                                        {isAdmin && (
+                                          <button
+                                            type="button"
+                                            onClick={() => { if(confirm('Material wirklich löschen?')) deleteMaterialMutation.mutate(item.id); }}
+                                            className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                            title="Löschen"
+                                            aria-label={`${item.name} löschen`}
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -567,11 +672,23 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         <MaterialModal 
           projectId={projectId}
           material={editingMaterial}
+          categories={materialCategories}
           onClose={() => { setIsMaterialModalOpen(false); setEditingMaterial(null); }}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['projectMaterials', projectId] });
             setIsMaterialModalOpen(false);
             setEditingMaterial(null);
+          }}
+        />
+      )}
+
+      {isCategoryModalOpen && (
+        <MaterialCategoriesModal
+          categories={materialCategories}
+          onClose={() => setIsCategoryModalOpen(false)}
+          onChanged={() => {
+            queryClient.invalidateQueries({ queryKey: ['materialCategories'] });
+            queryClient.invalidateQueries({ queryKey: ['projectMaterials', projectId] });
           }}
         />
       )}
@@ -683,20 +800,40 @@ function MemberModal({ projectId, currentMembers, allUsers, onClose, onSuccess }
   );
 }
 
-function MaterialModal({ projectId, material, onClose, onSuccess }: any) {
+function getMaterialCategoryError(error: unknown) {
+  if (typeof error === 'object' && error && 'code' in error && error.code === '23505') {
+    return 'Diese Kategorie existiert bereits.';
+  }
+  return error instanceof Error ? error.message : 'Die Änderung konnte nicht gespeichert werden.';
+}
+
+function MaterialModal({
+  projectId,
+  material,
+  categories,
+  onClose,
+  onSuccess,
+}: {
+  projectId: string;
+  material: ProjectMaterial | null;
+  categories: MaterialCategory[];
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
   const [name, setName] = useState(material?.name || '');
   const [quantity, setQuantity] = useState(material?.quantity || '');
+  const [categoryId, setCategoryId] = useState(material?.categoryId || '');
 
   const mutation = useMutation({
     mutationFn: () => material 
-      ? api.updateProjectMaterial(material.id, name, quantity)
-      : api.addProjectMaterial(projectId, name, quantity),
+      ? api.updateProjectMaterial(material.id, name, quantity, categoryId || null)
+      : api.addProjectMaterial(projectId, name, quantity, categoryId || null),
     onSuccess: () => {
       onSuccess();
       toast.success(material ? 'Material aktualisiert' : 'Material hinzugefügt');
     },
-    onError: (error: any) => {
-      toast.error('Fehler: ' + error.message);
+    onError: (error: unknown) => {
+      toast.error('Fehler: ' + getMaterialCategoryError(error));
     }
   });
 
@@ -741,6 +878,22 @@ function MaterialModal({ projectId, material, onClose, onSuccess }: any) {
                   placeholder="z. B. 50m oder 5 Stück" 
                 />
               </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Kategorie</label>
+                <select
+                  value={categoryId}
+                  onChange={event => setCategoryId(event.target.value)}
+                  className="block w-full rounded-lg border-slate-200 bg-white shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border"
+                >
+                  <option value="">Ohne Kategorie</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                </select>
+                {categories.length === 0 && (
+                  <p className="mt-1.5 text-[12px] text-slate-500">Ein Admin kann über „Kategorien verwalten“ Kategorien anlegen.</p>
+                )}
+              </div>
 
               <div className="pt-2 flex gap-3">
                 <button 
@@ -755,6 +908,161 @@ function MaterialModal({ projectId, material, onClose, onSuccess }: any) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MaterialCategoriesModal({
+  categories,
+  onClose,
+  onChanged,
+}: {
+  categories: MaterialCategory[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  const addMutation = useMutation({
+    mutationFn: () => api.addMaterialCategory(newName),
+    onSuccess: () => {
+      setNewName('');
+      onChanged();
+      toast.success('Kategorie hinzugefügt');
+    },
+    onError: (error: unknown) => toast.error(getMaterialCategoryError(error)),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api.updateMaterialCategory(id, name),
+    onSuccess: () => {
+      setEditingId(null);
+      setEditingName('');
+      onChanged();
+      toast.success('Kategorie aktualisiert');
+    },
+    onError: (error: unknown) => toast.error(getMaterialCategoryError(error)),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteMaterialCategory(id),
+    onSuccess: () => {
+      onChanged();
+      toast.success('Kategorie gelöscht');
+    },
+    onError: (error: unknown) => toast.error(getMaterialCategoryError(error)),
+  });
+
+  const handleAdd = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (newName.trim()) addMutation.mutate();
+  };
+
+  const handleDelete = (category: MaterialCategory) => {
+    const confirmed = window.confirm(
+      `Kategorie „${category.name}“ wirklich löschen? Zugeordnete Materialien bleiben erhalten und werden unter „Ohne Kategorie“ angezeigt.`,
+    );
+    if (confirmed) deleteMutation.mutate(category.id);
+  };
+
+  return (
+    <div className="relative z-[60]">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="fixed inset-0 z-10 overflow-y-auto">
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="material-categories-title" className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white text-left shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">
+              <div>
+                <h3 id="material-categories-title" className="text-[18px] font-bold text-slate-900">Materialkategorien</h3>
+                <p className="mt-1 text-[12px] text-slate-500">Diese Kategorien stehen in allen Aufträgen zur Verfügung.</p>
+              </div>
+              <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Kategorieverwaltung schließen">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto p-6">
+              <form onSubmit={handleAdd} className="flex gap-2">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={event => setNewName(event.target.value)}
+                  maxLength={80}
+                  placeholder="Neue Kategorie"
+                  aria-label="Name der neuen Kategorie"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2.5 text-[14px] shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+                <button type="submit" disabled={!newName.trim() || addMutation.isPending} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2.5 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                  <Plus className="h-4 w-4" />
+                  Hinzufügen
+                </button>
+              </form>
+
+              <div className="mt-5 space-y-2">
+                {categories.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-[13px] text-slate-500">
+                    Noch keine Kategorien angelegt
+                  </div>
+                ) : categories.map(category => (
+                  <div key={category.id} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2.5">
+                    {editingId === category.id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingName}
+                        onChange={event => setEditingName(event.target.value)}
+                        maxLength={80}
+                        aria-label={`Kategorie ${category.name} umbenennen`}
+                        className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-[14px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      />
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-slate-700">{category.name}</span>
+                    )}
+
+                    {editingId === category.id ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={!editingName.trim() || updateMutation.isPending}
+                          onClick={() => updateMutation.mutate({ id: category.id, name: editingName })}
+                          className="rounded-lg px-2.5 py-2 text-[12px] font-semibold text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+                        >
+                          Speichern
+                        </button>
+                        <button type="button" onClick={() => setEditingId(null)} className="rounded-lg px-2.5 py-2 text-[12px] font-semibold text-slate-500 hover:bg-slate-100">
+                          Abbrechen
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingId(category.id); setEditingName(category.name); }}
+                          className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600"
+                          aria-label={`${category.name} bearbeiten`}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(category)}
+                          disabled={deleteMutation.isPending}
+                          className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                          aria-label={`${category.name} löschen`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

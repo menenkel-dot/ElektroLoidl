@@ -1,4 +1,5 @@
 import { format, parseISO } from 'date-fns';
+import type { RowInput } from 'jspdf-autotable';
 
 type ProjectPdfNote = {
   text: string;
@@ -23,7 +24,7 @@ type ProjectPdfData = {
     address?: string;
   };
   members: Array<{ user: { name: string } }>;
-  materials: Array<{ name: string; quantity: string }>;
+  materials: Array<{ name: string; quantity: string; categoryId: string | null; categoryName: string | null }>;
   assignments: Array<{
     userId: string;
     startDate: string;
@@ -83,6 +84,27 @@ function displayDate(value: string) {
 
 function displayTime(value?: string) {
   return value?.substring(0, 5) || '';
+}
+
+function buildMaterialRows(materials: ProjectPdfData['materials']): RowInput[] {
+  if (materials.length === 0) return [['Kein Material erfasst', '']];
+
+  const grouped = new Map<string, ProjectPdfData['materials']>();
+  materials.forEach(material => {
+    const category = material.categoryName || 'Ohne Kategorie';
+    grouped.set(category, [...(grouped.get(category) || []), material]);
+  });
+
+  return [...grouped.entries()]
+    .sort(([left], [right]) => {
+      if (left === 'Ohne Kategorie') return 1;
+      if (right === 'Ohne Kategorie') return -1;
+      return left.localeCompare(right, 'de');
+    })
+    .flatMap(([category, entries]) => [
+      [{ content: category, colSpan: 2, styles: { fillColor: [241, 245, 249], textColor: [30, 41, 59], fontStyle: 'bold' } }],
+      ...entries.map(material => [material.name, material.quantity]),
+    ]);
 }
 
 export async function exportProjectPdf(data: ProjectPdfData) {
@@ -182,9 +204,7 @@ export async function exportProjectPdf(data: ProjectPdfData) {
   autoTable(pdf, {
     startY: cursorY,
     head: [['Bezeichnung', 'Anzahl / Menge']],
-    body: data.materials.length
-      ? data.materials.map(material => [material.name, material.quantity])
-      : [['Kein Material erfasst', '']],
+    body: buildMaterialRows(data.materials),
     theme: 'grid',
     styles: { font: 'helvetica', fontSize: 9, cellPadding: 2.5, textColor: [51, 65, 85], overflow: 'linebreak' },
     headStyles: { fillColor: [37, 99, 235], textColor: 255 },

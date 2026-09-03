@@ -268,26 +268,90 @@ export const api = {
   },
 
   getProjectMaterials: async (projectId: string) => {
-    const { data, error } = await supabase.from('project_materials').select('*').eq('project_id', projectId).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('project_materials')
+      .select('*, category:material_categories(id, name)')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    return data;
+    return data.map(material => ({
+      id: material.id,
+      projectId: material.project_id,
+      userId: material.user_id,
+      name: material.name,
+      quantity: material.quantity,
+      categoryId: material.category_id,
+      categoryName: material.category?.name || null,
+      createdAt: material.created_at,
+    }));
   },
 
-  addProjectMaterial: async (projectId: string, name: string, quantity: string) => {
+  addProjectMaterial: async (projectId: string, name: string, quantity: string, categoryId: string | null) => {
     const { data: { user } } = await supabase.auth.getUser();
-    const { data, error } = await supabase.from('project_materials').insert([{ project_id: projectId, user_id: user?.id, name, quantity }]).select().single();
+    if (!user) throw new Error('Nicht angemeldet.');
+    const { data, error } = await supabase.from('project_materials').insert([{
+      project_id: projectId,
+      user_id: user.id,
+      name: name.trim(),
+      quantity: quantity.trim(),
+      category_id: categoryId,
+    }]).select().single();
     if (error) throw error;
     return data;
   },
 
-  updateProjectMaterial: async (id: string, name: string, quantity: string) => {
-    const { data, error } = await supabase.from('project_materials').update({ name, quantity }).eq('id', id).select().single();
+  updateProjectMaterial: async (id: string, name: string, quantity: string, categoryId: string | null) => {
+    const { data, error } = await supabase.from('project_materials').update({
+      name: name.trim(),
+      quantity: quantity.trim(),
+      category_id: categoryId,
+    }).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
 
   deleteProjectMaterial: async (id: string) => {
     const { error } = await supabase.from('project_materials').delete().eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
+  getMaterialCategories: async () => {
+    const { data, error } = await supabase
+      .from('material_categories')
+      .select('id, name, created_at')
+      .order('name', { ascending: true });
+    if (error) throw error;
+    return data.map(category => ({
+      id: category.id,
+      name: category.name,
+      createdAt: category.created_at,
+    }));
+  },
+
+  addMaterialCategory: async (name: string) => {
+    const { data, error } = await supabase
+      .from('material_categories')
+      .insert([{ name: name.trim() }])
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  updateMaterialCategory: async (id: string, name: string) => {
+    const { data, error } = await supabase
+      .from('material_categories')
+      .update({ name: name.trim() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  deleteMaterialCategory: async (id: string) => {
+    const { error } = await supabase.from('material_categories').delete().eq('id', id);
     if (error) throw error;
     return true;
   },
