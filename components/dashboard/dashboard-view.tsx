@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { calculateCurrentOvertime } from '@/lib/overtime';
+import { workTimeApi, formatHours } from '@/lib/work-time-api';
+import { RecentProjectNotes } from './recent-project-notes';
 import Link from 'next/link';
 import { format } from 'date-fns';
 
@@ -27,6 +28,8 @@ export function DashboardView() {
     queryFn: () => api.getAbsences(),
   });
 
+  const balances = useQuery({ queryKey: ['workBalances', userProfile?.id], queryFn: workTimeApi.getBalances, enabled: Boolean(userProfile) });
+
   const isLoading = profileLoading || entriesLoading || projectsLoading;
 
   if (isLoading) {
@@ -41,14 +44,9 @@ export function DashboardView() {
   const totalMinutesToday = todaysEntries.reduce((acc, curr) => acc + curr.durationMinutes, 0);
   const hoursToday = (totalMinutesToday / 60).toFixed(1);
 
-  const { balance: overtimeValue, dailyTargetHours } = calculateCurrentOvertime(
-    userProfile,
-    entries || [],
-    absences || [],
-    now,
-  );
-  const overtime = overtimeValue.toFixed(1);
-  const overtimePrefix = Number(overtime) >= 0 ? '+' : '';
+  const balance = balances.data?.find(item => item.user_id === userProfile?.id);
+  const overtimeValue = balance?.balance_hours;
+  const overtimePrefix = overtimeValue !== undefined && overtimeValue >= 0 ? '+' : '';
 
   // Urlaubssaldo
   const openAbsences = absences?.filter(a => a.userId === userProfile?.id && a.status === 'pending').length || 0;
@@ -61,15 +59,15 @@ export function DashboardView() {
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Heute (Ist)</div>
           <div className="text-[24px] font-bold text-slate-900 leading-none">{hoursToday} h</div>
-          <div className="text-[12px] mt-1 text-slate-400 font-medium">Soll: {dailyTargetHours.toFixed(1)} h</div>
+          <div className="text-[12px] mt-1 text-slate-400 font-medium">Soll: {balance ? `${formatHours(balance.today_target_hours)} h` : '…'}</div>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Überstunden</div>
-          <div className={`text-[24px] font-bold leading-none ${Number(overtime) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            {overtimePrefix}{overtime} h
+          <div className={`text-[24px] font-bold leading-none ${(overtimeValue ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {overtimeValue === undefined ? '–' : `${overtimePrefix}${formatHours(overtimeValue)} h`}
           </div>
-          <div className="text-[12px] mt-1 text-slate-400 font-medium">Inkl. genehmigter Abwesenheit</div>
+          <div className="text-[12px] mt-1 text-slate-400 font-medium">{balances.isError ? <button onClick={() => balances.refetch()} className="text-red-600 underline">Konto erneut laden</button> : 'Fortlaufend · inkl. genehmigter Abwesenheit'}</div>
         </div>
         
         <div className="bg-white p-5 rounded-xl border border-slate-200">
@@ -84,6 +82,8 @@ export function DashboardView() {
           <div className="text-[12px] mt-1 text-slate-800 font-medium">Laufende Projekte</div>
         </div>
       </div>
+
+      {userProfile?.role === 'admin' && <RecentProjectNotes userId={userProfile.id} />}
 
       <div className="bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center">

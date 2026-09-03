@@ -47,9 +47,11 @@ export function AbsenceView() {
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers, enabled: isAdmin });
 
   const updateStatusMutation = useMutation({
+    onError: (error: Error) => toast.error(error.message),
     mutationFn: ({ id, status }: { id: string; status: string }) => api.updateAbsenceStatus(id, status),
     onSuccess: () => {
       toast.success('Status aktualisiert');
+      queryClient.invalidateQueries({ queryKey: ['workBalances'] });
       queryClient.invalidateQueries({ queryKey: ['absences'] });
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -60,6 +62,7 @@ export function AbsenceView() {
     mutationFn: api.deleteAbsence,
     onSuccess: () => {
       toast.success('Abwesenheitsantrag gelöscht');
+      queryClient.invalidateQueries({ queryKey: ['workBalances'] });
       queryClient.invalidateQueries({ queryKey: ['absences'] });
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });

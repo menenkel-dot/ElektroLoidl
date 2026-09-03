@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { calculateCurrentOvertime } from '@/lib/overtime';
+import { workTimeApi, formatHours } from '@/lib/work-time-api';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Coffee, Pencil, Plus, Trash2, UserRound, Users } from 'lucide-react';
 import { addMonths, endOfMonth, format, parseISO, startOfMonth } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -17,15 +17,12 @@ export function TimeTracker() {
   const [viewMode, setViewMode] = useState<'own' | 'team'>('team');
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
   const [selectedTeamUserId, setSelectedTeamUserId] = useState<string | null>(null);
-  const [balanceDate] = useState(() => new Date());
 
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
   const effectiveViewMode = isAdmin ? viewMode : 'own';
   const selectedStartDate = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
   const selectedEndDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
-  const currentStartDate = format(startOfMonth(balanceDate), 'yyyy-MM-dd');
-  const currentEndDate = format(endOfMonth(balanceDate), 'yyyy-MM-dd');
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
   const { data: services } = useQuery({ queryKey: ['services'], queryFn: api.getServices });
@@ -34,18 +31,13 @@ export function TimeTracker() {
     queryFn: () => api.getTimeEntries({ startDate: selectedStartDate, endDate: selectedEndDate }),
     enabled: Boolean(currentUser),
   });
-  const { data: currentBalanceEntries, isLoading: balanceEntriesLoading } = useQuery({
-    queryKey: ['timeEntries', currentStartDate, currentEndDate],
-    queryFn: () => api.getTimeEntries({ startDate: currentStartDate, endDate: currentEndDate }),
-    enabled: isAdmin,
-  });
-  const { data: currentAbsences, isLoading: balanceAbsencesLoading } = useQuery({
-    queryKey: ['absences', 'overtime', currentStartDate, currentEndDate],
-    queryFn: () => api.getAbsences({ startDate: currentStartDate, endDate: currentEndDate }),
+  const balancesQuery = useQuery({
+    queryKey: ['workBalances', currentUser?.id],
+    queryFn: workTimeApi.getBalances,
     enabled: isAdmin,
   });
   const { data: users, isLoading: usersLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers, enabled: isAdmin });
-  const balanceLoading = usersLoading || balanceEntriesLoading || balanceAbsencesLoading;
+  const balanceLoading = usersLoading || balancesQuery.isLoading;
 
   const clientMap = useMemo(() => new Map((clients || []).map(client => [client.id, client])), [clients]);
   const projectMap = useMemo(() => new Map((projects || []).map(project => [project.id, project])), [projects]);
@@ -54,10 +46,7 @@ export function TimeTracker() {
     .filter(user => user.id !== currentUser?.id)
     .sort((left, right) => left.name.localeCompare(right.name, 'de')),
   [currentUser?.id, users]);
-  const overtimeByUser = useMemo(() => new Map(teamUsers.map(user => [
-    user.id,
-    calculateCurrentOvertime(user, currentBalanceEntries || [], currentAbsences || [], balanceDate).balance,
-  ])), [balanceDate, currentAbsences, currentBalanceEntries, teamUsers]);
+  const overtimeByUser = useMemo(() => new Map((balancesQuery.data || []).map(balance => [balance.user_id, balance.balance_hours])), [balancesQuery.data]);
   const selectedTeamUser = teamUsers.find(user => user.id === selectedTeamUserId);
   const visibleEntries = useMemo(() => {
     const targetUserId = effectiveViewMode === 'own' ? currentUser?.id : selectedTeamUserId;
@@ -70,6 +59,7 @@ export function TimeTracker() {
     onSuccess: () => {
       toast.success('Zeiteintrag gelöscht');
       queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+      queryClient.invalidateQueries({ queryKey: ['workBalances'] });
     },
     onError: (error: any) => toast.error('Fehler beim Löschen: ' + error.message),
   });
@@ -132,7 +122,7 @@ export function TimeTracker() {
           <div className="divide-y divide-slate-100">
             {balanceLoading ? (
               <p className="px-5 py-8 text-center text-sm text-slate-500">Lade Überstundenkonten...</p>
-            ) : teamUsers.map(user => {
+            ) : balancesQuery.isError ? <p role="alert" className="p-5 text-sm text-red-600">Konten konnten nicht geladen werden. <button onClick={() => balancesQuery.refetch()} className="underline">Erneut versuchen</button></p> : teamUsers.map(user => {
               const balance = overtimeByUser.get(user.id) || 0;
               const isSelected = selectedTeamUserId === user.id;
               return (
@@ -141,7 +131,7 @@ export function TimeTracker() {
                     <span className="block truncate text-sm font-bold text-slate-900">{user.name}</span>
                     <span className="mt-1 inline-flex rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-500">{user.role === 'admin' ? 'Admin' : 'Mitarbeiter'}</span>
                   </span>
-                  <span className={`text-lg font-bold tabular-nums ${balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-slate-500'}`}>{balance > 0 ? '+' : ''}{balance.toFixed(1)} h</span>
+                  <span className={`text-lg font-bold tabular-nums ${balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-slate-500'}`}>{balance > 0 ? '+' : ''}{formatHours(balance)} h</span>
                 </button>
               );
             })}
@@ -183,6 +173,7 @@ export function TimeTracker() {
           initialUserId={createTargetUserId}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['timeEntries'] });
+            queryClient.invalidateQueries({ queryKey: ['workBalances'] });
             queryClient.invalidateQueries({ queryKey: ['projects'] });
             queryClient.invalidateQueries({ queryKey: ['project'] });
           }}

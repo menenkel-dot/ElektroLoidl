@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { exportProjectPdf } from '@/lib/project-pdf';
+import { ProjectTimeSummary } from './project-time-summary';
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown } from 'lucide-react';
@@ -75,6 +76,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       setNewNote('');
       toast.success('Notiz hinzugefügt');
+      queryClient.invalidateQueries({ queryKey: ['recentProjectNotes'] });
     }
   });
 
@@ -85,6 +87,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       setEditingNoteId(null);
       setEditingNoteText('');
       toast.success('Notiz aktualisiert');
+      queryClient.invalidateQueries({ queryKey: ['recentProjectNotes'] });
     },
     onError: (error: Error) => toast.error(`Notiz konnte nicht gespeichert werden: ${error.message}`),
   });
@@ -377,7 +380,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          {isAdmin && <ProjectTimeSummary key={projectId} projectId={projectId} userId={currentUser.id} />}
+
+          <div id="project-documentation" className="scroll-mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-2">
               <FileText className="w-5 h-5 text-slate-400" />
               <h3 className="text-[16px] font-bold text-slate-900 leading-none">Auftrags-Dokumentation</h3>

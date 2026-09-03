@@ -5,6 +5,8 @@ import { api } from '@/lib/api';
 import { User, Mail, Plus, Shield, UserCircle, CheckCircle2, Clock, Calendar, Trash2, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { WorkModelModal } from './work-model-modal';
+import { workTimeApi, formatHours } from '@/lib/work-time-api';
 
 const MENU_ITEMS = [
   { id: 'dashboard', name: 'Dashboard' },
@@ -22,8 +24,11 @@ export function TeamView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
+  const [workModelUser, setWorkModelUser] = useState<{ id: string; name: string } | null>(null);
   const { data: users, isLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+  const modelsQuery = useQuery({ queryKey: ['workModels', currentUser?.id], queryFn: workTimeApi.getModels, enabled: Boolean(currentUser) });
+  const modelFor = (id: string) => modelsQuery.data?.find(model => model.user_id === id);
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteUser,
@@ -98,7 +103,7 @@ export function TeamView() {
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-2 text-[12px] text-slate-600">
                    <Clock className="w-3.5 h-3.5 text-slate-400" />
-                   <span>{user.targetHoursMonthly}h / Monat</span>
+                   <span>{modelFor(user.id)?.daily_minutes ? `${formatHours(modelFor(user.id)!.daily_minutes!.reduce((sum,minutes) => sum + minutes,0) / 60)} h / Woche` : `${user.targetHoursMonthly} h / Monat`}</span>
                 </div>
                 <div className="flex items-center gap-2 text-[12px] text-slate-600">
                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -129,7 +134,8 @@ export function TeamView() {
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" disabled={modelsQuery.isPending || modelsQuery.isError} onClick={() => setWorkModelUser(user)} className="rounded-lg px-2.5 py-2 text-xs font-semibold text-blue-600 disabled:opacity-40">Arbeitszeitmodell</button>
                   <button
                     type="button"
                     onClick={() => setPasswordUser(user)}
@@ -156,12 +162,16 @@ export function TeamView() {
       {isModalOpen && (
         <UserModal 
           user={editingUser}
+          hasWeeklyModel={Boolean(editingUser && modelFor(editingUser.id)?.daily_minutes)}
           onClose={() => {
             setIsModalOpen(false);
             setEditingUser(null);
           }} 
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['users'] });
+            queryClient.invalidateQueries({ queryKey: ['workModels'] });
+            queryClient.invalidateQueries({ queryKey: ['workBalances'] });
+            queryClient.invalidateQueries({ queryKey: ['currentUser'] });
             setIsModalOpen(false);
             setEditingUser(null);
           }}
@@ -171,6 +181,8 @@ export function TeamView() {
       {passwordUser && (
         <PasswordModal user={passwordUser} onClose={() => setPasswordUser(null)} />
       )}
+      {modelsQuery.isError && <p role="alert" className="text-sm text-red-600">Arbeitszeitmodelle konnten nicht geladen werden. <button className="underline" onClick={() => modelsQuery.refetch()}>Erneut versuchen</button></p>}
+      {workModelUser && <WorkModelModal user={workModelUser} model={modelFor(workModelUser.id)} onClose={() => setWorkModelUser(null)} />}
     </div>
   );
 }
@@ -255,7 +267,7 @@ function PasswordModal({ user, onClose }: { user: any, onClose: () => void }) {
   );
 }
 
-function UserModal({ user, onClose, onSuccess }: { user?: any, onClose: () => void, onSuccess: () => void }) {
+function UserModal({ user, onClose, onSuccess, hasWeeklyModel }: { user?: any, onClose: () => void, onSuccess: () => void, hasWeeklyModel: boolean }) {
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [email, setEmail] = useState(''); // Nur bei Neuanlage nötig
@@ -353,7 +365,8 @@ function UserModal({ user, onClose, onSuccess }: { user?: any, onClose: () => vo
 
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Soll-Stunden (Monat)</label>
-                  <input required type="number" value={targetHours} onChange={e => setTargetHours(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" />
+                  <input required disabled={hasWeeklyModel} min="0" max="744" step="any" type="number" value={targetHours} onChange={e => setTargetHours(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border disabled:opacity-40" />
+                  <p className="mt-1 text-xs text-slate-500">{hasWeeklyModel ? 'Das Wochenmodell ist maßgeblich. Änderungen über „Arbeitszeitmodell“.' : 'Optional nach dem Speichern über „Arbeitszeitmodell“ auf Wochenstunden umstellen.'}</p>
                 </div>
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Urlaubstage (Jahr)</label>

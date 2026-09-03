@@ -308,7 +308,7 @@ export const api = {
       name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Mitarbeiter',
       role: p.role,
       permissions: p.permissions,
-      targetHoursMonthly: p.target_hours_monthly || 160,
+      targetHoursMonthly: p.target_hours_monthly ?? 160,
       vacationTotal: p.vacation_total || 30,
       vacationUsed: p.vacation_used || 0,
       overtimeBase: p.overtime_base || 0,
@@ -324,7 +324,7 @@ export const api = {
     return {
       ...data,
       name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Mitarbeiter',
-      targetHoursMonthly: data.target_hours_monthly || 160,
+      targetHoursMonthly: data.target_hours_monthly ?? 160,
       vacationTotal: data.vacation_total || 30,
       vacationUsed: data.vacation_used || 0,
       overtimeBase: data.overtime_base || 0
