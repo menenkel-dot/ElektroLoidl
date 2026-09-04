@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History, Trash2 } from 'lucide-react';
+import { getBavarianHoliday } from '@/lib/bavarian-holidays.mjs';
+import { ChevronLeft, ChevronRight, Plus, Clock, Plane, HeartPulse, History, Trash2, Landmark } from 'lucide-react';
 import { addDays, addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameDay, isSameMonth, isWithinInterval, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -129,12 +130,21 @@ export function ScheduleView() {
           {/* Header Row */}
           <div className="grid grid-cols-6 border-b border-gray-200 bg-gray-50">
             <div className="p-4 border-r border-gray-200 font-semibold text-gray-900 text-sm">Mitarbeiter</div>
-            {weekDays.map(day => (
-              <div key={day.toISOString()} className="p-4 border-r border-gray-200 text-center">
-                <p className="text-xs text-gray-500 uppercase">{format(day, 'EEEE', { locale: de })}</p>
-                <p className="font-medium text-gray-900">{format(day, 'dd.MM.')}</p>
-              </div>
-            ))}
+            {weekDays.map(day => {
+              const holiday = getBavarianHoliday(day);
+              return (
+                <div key={day.toISOString()} className={`border-r border-gray-200 p-4 text-center ${holiday ? 'bg-rose-50' : ''}`}>
+                  <p className={`text-xs uppercase ${holiday ? 'text-rose-600' : 'text-gray-500'}`}>{format(day, 'EEEE', { locale: de })}</p>
+                  <p className={`font-medium ${holiday ? 'text-rose-900' : 'text-gray-900'}`}>{format(day, 'dd.MM.')}</p>
+                  {holiday && (
+                    <span className="mt-1.5 inline-flex max-w-full items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-[10px] font-bold leading-tight text-rose-700" title={`Feiertag in Bayern: ${holiday}`}>
+                      <Landmark className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{holiday}</span>
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
           
           {/* User Rows */}
@@ -150,9 +160,10 @@ export function ScheduleView() {
                 {weekDays.map(day => {
                   const dayAssignments = assignmentsForDay(day, user.id);
                   const dayAbsences = absencesForDay(day, user.id);
+                  const holiday = getBavarianHoliday(day);
 
                   return (
-                    <div key={day.toISOString()} className="p-2 border-r border-gray-200 relative min-h-[100px]">
+                    <div key={day.toISOString()} className={`relative min-h-[100px] border-r border-gray-200 p-2 ${holiday ? 'bg-rose-50/40' : ''}`}>
                       {/* Zeige Abwesenheiten */}
                       {dayAbsences.map(abs => {
                         const style = typeLabels[abs.type as keyof typeof typeLabels] || typeLabels.vacation;
@@ -213,11 +224,12 @@ export function ScheduleView() {
                 const dayAbsences = absencesForDay(day);
                 const belongsToMonth = isSameMonth(day, currentDate);
                 const isToday = isSameDay(day, today);
+                const holiday = getBavarianHoliday(day);
 
                 return (
                   <div
                     key={day.toISOString()}
-                    className={`min-h-[155px] border-slate-200 p-2 ${index % 7 === 6 ? '' : 'border-r'} ${index >= calendarDays.length - 7 ? '' : 'border-b'} ${belongsToMonth ? 'bg-white' : 'bg-slate-50/70'}`}
+                    className={`min-h-[155px] border-slate-200 p-2 ${index % 7 === 6 ? '' : 'border-r'} ${index >= calendarDays.length - 7 ? '' : 'border-b'} ${holiday && belongsToMonth ? 'bg-rose-50/60' : belongsToMonth ? 'bg-white' : 'bg-slate-50/70'}`}
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${isToday ? 'bg-blue-600 text-white' : belongsToMonth ? 'text-slate-700' : 'text-slate-400'}`}>
@@ -227,6 +239,12 @@ export function ScheduleView() {
                         <span className="text-[10px] font-semibold text-slate-400">{dayAssignments.length} Einsatz{dayAssignments.length === 1 ? '' : 'e'}</span>
                       )}
                     </div>
+                    {holiday && (
+                      <div className={`mb-2 flex items-start gap-1 rounded-md px-1.5 py-1 text-[10px] font-bold leading-tight ${belongsToMonth ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-400'}`} title={`Feiertag in Bayern: ${holiday}`}>
+                        <Landmark className="mt-px h-3 w-3 shrink-0" />
+                        <span>{holiday}</span>
+                      </div>
+                    )}
                     <div className="space-y-1.5">
                       {dayAbsences.map(absence => {
                         const style = typeLabels[absence.type as keyof typeof typeLabels] || typeLabels.vacation;
