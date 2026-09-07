@@ -17,6 +17,7 @@ function command(method, params = {}) {
 const adminId = '10000000-0000-0000-0000-000000000001';
 const employeeId = '10000000-0000-0000-0000-000000000002';
 const projectId = '20000000-0000-0000-0000-000000000001';
+const archivedProjectId = '20000000-0000-0000-0000-000000000002';
 const permissions = { visible_menu_items: ['dashboard','clients','projects','schedule','time','absence','team','reports'] };
 const admin = { id: adminId, first_name: 'Test', last_name: 'Admin', role: 'admin', target_hours_monthly: 160, vacation_total: 30, vacation_used: 0, overtime_base: 20, permissions };
 const employee = { ...admin, id: employeeId, first_name: 'Muster', last_name: 'Mitarbeiter', role: 'employee', target_hours_monthly: 169, overtime_base: 15 };
@@ -31,7 +32,14 @@ function response(request) {
   if (url.pathname.endsWith('/user')) return authUser;
   if (url.pathname.endsWith('/token')) return session;
   if (url.pathname.endsWith('/profiles')) return url.searchParams.has('id') ? profile : [admin, employee];
-  if (url.pathname.endsWith('/projects')) { const project = { id: projectId, name: 'Neubau Musterstraße', client_id: null }; return url.searchParams.has('id') ? project : [project]; }
+  if (url.pathname.endsWith('/projects')) {
+    const projects = [
+      { id: projectId, name: 'Neubau Musterstraße', client_id: null, archived_at: null, archived_by: null },
+      { id: archivedProjectId, name: 'Sanierung Altbau', client_id: null, archived_at: '2026-09-05T12:00:00Z', archived_by: adminId },
+    ];
+    if (!url.searchParams.has('id')) return projects;
+    return url.searchParams.get('id')?.includes(archivedProjectId) ? projects[1] : projects[0];
+  }
   if (url.pathname.endsWith('/work_time_models')) return [admin,employee].map(p => ({user_id:p.id,effective_from:'2026-09-01',daily_minutes:null,monthly_hours:p.target_hours_monthly,holiday_profile:null}));
   if (url.pathname.endsWith('/get_work_balances')) return role === 'employee' ? [balance] : [balance, { ...balance, user_id: adminId, balance_hours: 20 }];
   if (url.pathname.endsWith('/get_recent_project_notes')) return [1,2,3].map(i=>({id:`note-${i}`,project_id:projectId,project_name:'Neubau Musterstraße',author_name:'Muster Mitarbeiter',created_at:'2026-09-03T10:30:00Z',text:`Notiz ${i}: Leitungen im Erdgeschoss fertig verlegt. Material geprüft. `+'Weitere Details zur Installation. '.repeat(10)}));

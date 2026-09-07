@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Archive, ArchiveRestore } from 'lucide-react';
 import { useState } from 'react';
 import Link from 'next/link';
 import { Project } from '@/lib/mock-data';
@@ -23,14 +23,18 @@ export function ProjectsView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [projectStatus, setProjectStatus] = useState<'open' | 'archived'>('open');
 
-  const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
+  const { data: projects } = useQuery({ queryKey: ['projects', 'all'], queryFn: () => api.getProjects({ includeArchived: true }) });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
   const { data: allMembers } = useQuery({ queryKey: ['allProjectMembers'], queryFn: api.getAllProjectMembers });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
   const normalizedSearch = searchTerm.trim().toLocaleLowerCase('de');
-  const filteredProjects = projects?.filter(project => {
+  const openProjects = projects?.filter(project => !project.isArchived) || [];
+  const archivedProjects = projects?.filter(project => project.isArchived) || [];
+  const statusProjects = isAdmin && projectStatus === 'archived' ? archivedProjects : openProjects;
+  const filteredProjects = statusProjects.filter(project => {
     const client = clients?.find(item => item.id === project.clientId);
     return [project.name, client?.name, client?.address]
       .some(value => value?.toLocaleLowerCase('de').includes(normalizedSearch));
@@ -49,11 +53,36 @@ export function ProjectsView() {
     onError: (error: Error) => toast.error(`Fehler beim Löschen: ${error.message}`),
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: api.archiveProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['recentProjectNotes'] });
+      toast.success('Auftrag archiviert');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: api.reactivateProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Auftrag reaktiviert');
+    },
+    onError: (error: Error) => toast.error(`Reaktivierung fehlgeschlagen: ${error.message}`),
+  });
+
   const handleDelete = (project: Project) => {
     const confirmed = confirm(
       `Auftrag "${project.name}" wirklich unwiderruflich löschen? Zugehörige Einsätze, Arbeitszeiten, Materialien und Notizen werden ebenfalls gelöscht.`,
     );
     if (confirmed) deleteMutation.mutate(project.id);
+  };
+
+  const handleArchive = (project: Project) => {
+    if (confirm(`Auftrag "${project.name}" archivieren? Er ist anschließend schreibgeschützt und kann jederzeit reaktiviert werden.`)) {
+      archiveMutation.mutate(project.id);
+    }
   };
 
   return (
@@ -77,6 +106,27 @@ export function ProjectsView() {
         )}
       </div>
 
+      {isAdmin && (
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-1" aria-label="Auftragsstatus auswählen">
+          <button
+            type="button"
+            onClick={() => setProjectStatus('open')}
+            aria-pressed={projectStatus === 'open'}
+            className={`rounded-md px-3 py-2 text-[13px] font-semibold transition-colors ${projectStatus === 'open' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Offen ({openProjects.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setProjectStatus('archived')}
+            aria-pressed={projectStatus === 'archived'}
+            className={`rounded-md px-3 py-2 text-[13px] font-semibold transition-colors ${projectStatus === 'archived' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+          >
+            Archiviert ({archivedProjects.length})
+          </button>
+        </div>
+      )}
+
       <div className="relative max-w-xl">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
@@ -95,14 +145,21 @@ export function ProjectsView() {
           const projectMembers = allMembers?.filter(m => m.projectId === project.id) || [];
           return (
             <div key={project.id} className="relative group">
-              <Link href={`/projects/${project.id}`} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:border-blue-200 hover:shadow-md transition-all cursor-pointer h-full">
+              <Link href={`/projects/${project.id}`} className={`rounded-xl shadow-sm border overflow-hidden flex flex-col hover:shadow-md transition-all cursor-pointer h-full ${project.isArchived ? 'border-slate-200 bg-slate-50 hover:border-slate-300' : 'border-gray-100 bg-white hover:border-blue-200'}`}>
                 <div className="p-6 flex-1">
                   <div className="flex justify-between items-start">
                     <div>
-                      <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 mb-2">
-                        {client?.name}
-                      </span>
-                      <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">{project.name}</h3>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                          {client?.name}
+                        </span>
+                        {project.isArchived && (
+                          <span className="inline-flex items-center rounded-md bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-600">
+                            Archiviert {project.archivedAt ? new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeZone: 'Europe/Berlin' }).format(new Date(project.archivedAt)) : ''}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className={`text-lg font-semibold transition-colors ${project.isArchived ? 'text-slate-700 group-hover:text-slate-900' : 'text-gray-900 group-hover:text-blue-600'}`}>{project.name}</h3>
                     </div>
                   </div>
 
@@ -136,28 +193,55 @@ export function ProjectsView() {
               </Link>
               {isAdmin && (
                 <div className="responsive-card-actions absolute top-4 right-4 z-10 flex items-center gap-1 rounded-lg border border-slate-100 bg-white p-0.5 shadow-sm transition-opacity dark:border-slate-700 dark:bg-slate-900">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingProject(project);
-                      setIsModalOpen(true);
-                    }}
-                    className="rounded-md p-2 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                    title="Bearbeiten"
-                    aria-label={`${project.name} bearbeiten`}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(project)}
-                    disabled={deleteMutation.isPending}
-                    className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                    title="Löschen"
-                    aria-label={`${project.name} löschen`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {project.isArchived ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => reactivateMutation.mutate(project.id)}
+                        disabled={reactivateMutation.isPending}
+                        className="rounded-md p-2 text-slate-400 transition-colors hover:bg-green-50 hover:text-green-700 disabled:opacity-50"
+                        title="Reaktivieren"
+                        aria-label={`${project.name} reaktivieren`}
+                      >
+                        <ArchiveRestore className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(project)}
+                        disabled={deleteMutation.isPending}
+                        className="rounded-md p-2 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        title="Endgültig löschen"
+                        aria-label={`${project.name} endgültig löschen`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProject(project);
+                          setIsModalOpen(true);
+                        }}
+                        className="rounded-md p-2 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                        title="Bearbeiten"
+                        aria-label={`${project.name} bearbeiten`}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleArchive(project)}
+                        disabled={archiveMutation.isPending}
+                        className="rounded-md p-2 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-700 disabled:opacity-50"
+                        title="Archivieren"
+                        aria-label={`${project.name} archivieren`}
+                      >
+                        <Archive className="w-4 h-4" />
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -165,7 +249,11 @@ export function ProjectsView() {
         })}
         {filteredProjects?.length === 0 && (
           <div className="col-span-full rounded-xl border border-slate-200 bg-white py-12 text-center text-slate-500">
-            {searchTerm.trim() ? 'Keine Aufträge für diese Suche gefunden.' : 'Es wurden noch keine Aufträge angelegt.'}
+            {searchTerm.trim()
+              ? 'Keine Aufträge für diese Suche gefunden.'
+              : isAdmin && projectStatus === 'archived'
+                ? 'Es wurden noch keine Aufträge archiviert.'
+                : 'Es wurden noch keine Aufträge angelegt.'}
           </div>
         )}
       </div>

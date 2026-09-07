@@ -24,7 +24,10 @@ export function TimeTracker() {
   const selectedStartDate = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
   const selectedEndDate = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: api.getClients });
-  const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
+  const { data: projects } = useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: () => api.getProjects({ includeArchived: true }),
+  });
   const { data: services } = useQuery({ queryKey: ['services'], queryFn: api.getServices });
   const { data: entries, isLoading: entriesLoading } = useQuery({
     queryKey: ['timeEntries', selectedStartDate, selectedEndDate],
@@ -292,7 +295,9 @@ function EntryModal({ onClose, clients, projects, users, currentUser, entry, ini
     }
   });
 
-  const availableProjects = projects.filter((p: any) => p.clientId === clientId);
+  const availableProjects = projects.filter((p: any) =>
+    p.clientId === clientId && (!p.isArchived || p.id === entry?.projectId),
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -374,7 +379,7 @@ function EntryModal({ onClose, clients, projects, users, currentUser, entry, ini
                   <label className="block text-sm font-medium text-gray-700 mb-1">Auftrag</label>
                   <select required disabled={!clientId} value={projectId} onChange={e => setProjectId(e.target.value)} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white disabled:bg-gray-100">
                     <option value="">Bitte wählen...</option>
-                    {availableProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {availableProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}{p.isArchived ? ' (archiviert)' : ''}</option>)}
                   </select>
                 </div>
               </div>

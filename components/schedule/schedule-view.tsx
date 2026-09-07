@@ -24,7 +24,10 @@ export function ScheduleView() {
 
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: assignments } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
-  const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
+  const { data: projects } = useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: () => api.getProjects({ includeArchived: true }),
+  });
   const { data: absences } = useQuery({ queryKey: ['absences'], queryFn: () => api.getAbsences() });
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
@@ -38,6 +41,7 @@ export function ScheduleView() {
   const today = new Date();
   const userMap = useMemo(() => new Map((users || []).map(user => [user.id, user])), [users]);
   const projectMap = useMemo(() => new Map((projects || []).map(project => [project.id, project])), [projects]);
+  const activeProjects = useMemo(() => (projects || []).filter(project => !project.isArchived), [projects]);
 
   const assignmentsForDay = (day: Date, userId?: string) => (assignments || []).filter(assignment => {
     if (userId && assignment.userId !== userId) return false;
@@ -295,7 +299,7 @@ export function ScheduleView() {
             setEditingAssignment(null);
           }}
           users={users || []}
-          projects={projects || []}
+          projects={activeProjects}
           onSuccess={() => queryClient.invalidateQueries({ queryKey: ['assignments'] })}
         />
       )}

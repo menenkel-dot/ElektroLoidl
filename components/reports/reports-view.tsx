@@ -47,7 +47,10 @@ export function ReportsView() {
       userId: isAdmin && filterUser ? filterUser : undefined,
     }),
   });
-  const { data: projects, isLoading: projectsLoading } = useQuery({ queryKey: ['projects'], queryFn: api.getProjects });
+  const { data: projects, isLoading: projectsLoading } = useQuery({
+    queryKey: ['projects', 'all'],
+    queryFn: () => api.getProjects({ includeArchived: true }),
+  });
   const { data: users, isLoading: usersLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers, enabled: isAdmin });
 
   const projectMap = useMemo(() => new Map((projects || []).map(project => [project.id, project.name])), [projects]);

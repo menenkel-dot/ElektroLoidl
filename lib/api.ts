@@ -96,18 +96,30 @@ export const api = {
     return true;
   },
 
-  getProjects: async () => {
-    const { data, error } = await supabase.from('projects').select('id, client_id, name').order('created_at', { ascending: false });
+  getProjects: async ({ includeArchived = false }: { includeArchived?: boolean } = {}) => {
+    let query = supabase
+      .from('projects')
+      .select('id, client_id, name, archived_at, archived_by')
+      .order('created_at', { ascending: false });
+    if (!includeArchived) query = query.is('archived_at', null);
+    const { data, error } = await query;
     if (error) throw error;
     return data.map(p => ({
       id: p.id,
       clientId: p.client_id,
-      name: p.name
+      name: p.name,
+      archivedAt: p.archived_at,
+      archivedBy: p.archived_by,
+      isArchived: Boolean(p.archived_at),
     }));
   },
 
   getProject: async (id: string) => {
-    const { data: project, error: pError } = await supabase.from('projects').select('id, client_id, name').eq('id', id).single();
+    const { data: project, error: pError } = await supabase
+      .from('projects')
+      .select('id, client_id, name, archived_at, archived_by')
+      .eq('id', id)
+      .single();
     if (pError) throw pError;
     const { data: notes, error: notesError } = await supabase
       .from('project_notes')
@@ -130,6 +142,9 @@ export const api = {
     return { 
       ...project, 
       clientId: project.client_id,
+      archivedAt: project.archived_at,
+      archivedBy: project.archived_by,
+      isArchived: Boolean(project.archived_at),
       notes: notes?.map(n => {
         const author = Array.isArray(n.author) ? n.author[0] : n.author;
         const authorName = author
@@ -153,6 +168,28 @@ export const api = {
     if (updates.name) dbUpdates.name = updates.name;
     if (updates.clientId) dbUpdates.client_id = updates.clientId;
     const { data, error } = await supabase.from('projects').update(dbUpdates).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  archiveProject: async (id: string) => {
+    const { data, error } = await supabase
+      .from('projects')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('id, archived_at, archived_by')
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  reactivateProject: async (id: string) => {
+    const { data, error } = await supabase
+      .from('projects')
+      .update({ archived_at: null })
+      .eq('id', id)
+      .select('id, archived_at, archived_by')
+      .single();
     if (error) throw error;
     return data;
   },

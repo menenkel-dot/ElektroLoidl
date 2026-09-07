@@ -23,6 +23,9 @@ export type Project = {
   id: string;
   clientId: string;
   name: string;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  isArchived?: boolean;
   notes?: ProjectNote[];
   images?: ProjectImage[];
 };

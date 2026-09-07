@@ -19,8 +19,8 @@ export function DashboardView() {
   });
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: api.getProjects,
+    queryKey: ['projects', 'all'],
+    queryFn: () => api.getProjects({ includeArchived: true }),
   });
 
   const { data: absences } = useQuery({
@@ -78,7 +78,7 @@ export function DashboardView() {
         
         <div className="bg-white p-5 rounded-xl border border-slate-200">
           <div className="text-[12px] text-slate-500 uppercase tracking-[0.05em] mb-2 leading-none">Aktive Aufträge</div>
-          <div className="text-[24px] font-bold text-slate-900 leading-none">{projects?.length || 0}</div>
+          <div className="text-[24px] font-bold text-slate-900 leading-none">{projects?.filter(project => !project.isArchived).length || 0}</div>
           <div className="text-[12px] mt-1 text-slate-800 font-medium">Laufende Projekte</div>
         </div>
       </div>

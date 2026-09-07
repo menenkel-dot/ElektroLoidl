@@ -6,7 +6,7 @@ import { exportProjectPdf } from '@/lib/project-pdf';
 import { ProjectTimeSummary } from './project-time-summary';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown, ChevronDown, ChevronRight, Settings2 } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown, ChevronDown, ChevronRight, Settings2, Archive, ArchiveRestore } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -46,6 +46,9 @@ interface Project {
   id: string;
   clientId: string;
   name: string;
+  archivedAt: string | null;
+  archivedBy: string | null;
+  isArchived: boolean;
   notes: ProjectNote[];
   images: ProjectImage[];
 }
@@ -92,7 +95,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   });
   const { data: allUsers, isLoading: usersLoading } = useQuery({ queryKey: ['users'], queryFn: api.getUsers });
   const { data: assignments, isLoading: assignmentsLoading } = useQuery({ queryKey: ['assignments'], queryFn: api.getAssignments });
-  const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
+  const { data: currentUser, isLoading: currentUserLoading } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
 
   const noteMutation = useMutation({
     mutationFn: (text: string) => api.addProjectNote(projectId, text),
@@ -141,6 +144,27 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     }
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: () => api.archiveProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['recentProjectNotes'] });
+      toast.success('Auftrag archiviert');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: () => api.reactivateProject(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Auftrag reaktiviert');
+    },
+    onError: (error: Error) => toast.error(`Reaktivierung fehlgeschlagen: ${error.message}`),
+  });
+
   const materialGroups = useMemo(() => {
     const grouped = new Map<string, ProjectMaterial[]>();
     (materials || []).forEach(material => {
@@ -170,11 +194,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     setExpandedMaterialGroups(current => ({ ...current, [groupId]: !(current[groupId] ?? true) }));
   };
 
-  if (projectLoading) return <div className="text-slate-500">Lade Auftrag...</div>;
-  if (!project) return <div className="text-red-500">Auftrag nicht gefunden.</div>;
+  if (projectLoading || currentUserLoading) return <div className="text-slate-500">Lade Auftrag...</div>;
+  if (!project || (project.isArchived && currentUser?.role !== 'admin')) return <div className="text-red-500">Auftrag nicht gefunden oder nicht mehr aktiv.</div>;
 
   const client = clients?.find(c => c.id === project.clientId);
   const isAdmin = currentUser?.role === 'admin';
+  const isArchived = project.isArchived;
   const clientAddress = client?.address?.trim();
   const contactPerson = client?.contactPerson?.trim();
   const clientPhone = client?.phone?.trim();
@@ -216,8 +241,15 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   };
 
   const handleEditMaterial = (material: ProjectMaterial) => {
+    if (isArchived) return;
     setEditingMaterial(material);
     setIsMaterialModalOpen(true);
+  };
+
+  const handleArchive = () => {
+    if (confirm(`Auftrag "${project.name}" archivieren? Er ist anschließend schreibgeschützt und kann jederzeit reaktiviert werden.`)) {
+      archiveMutation.mutate();
+    }
   };
 
   const handleProjectPdfExport = async () => {
@@ -278,6 +310,27 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               </div>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
+              {isAdmin && (isArchived ? (
+                <button
+                  type="button"
+                  onClick={() => reactivateMutation.mutate()}
+                  disabled={reactivateMutation.isPending}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2.5 text-[14px] font-semibold text-green-700 shadow-sm transition-colors hover:bg-green-100 disabled:opacity-60"
+                >
+                  <ArchiveRestore className="h-4 w-4" />
+                  {reactivateMutation.isPending ? 'Wird reaktiviert...' : 'Reaktivieren'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleArchive}
+                  disabled={archiveMutation.isPending}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-[14px] font-semibold text-amber-700 shadow-sm transition-colors hover:bg-amber-100 disabled:opacity-60"
+                >
+                  <Archive className="h-4 w-4" />
+                  {archiveMutation.isPending ? 'Wird archiviert...' : 'Archivieren'}
+                </button>
+              ))}
               <button
                 type="button"
                 onClick={handleProjectPdfExport}
@@ -313,6 +366,16 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
+      {isArchived && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">
+          <Archive className="mt-0.5 h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">Dieser Auftrag ist archiviert.</p>
+            <p className="mt-0.5 text-amber-800">Die vorhandenen Daten können weiterhin angesehen und exportiert werden. Neue Einträge und Änderungen sind erst nach der Reaktivierung möglich.</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <div className="lg:col-span-2 space-y-6">
           {/* Projekt-Team Sektion */}
@@ -322,7 +385,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <Users className="w-5 h-5 text-slate-400" />
                 <h3 className="text-[16px] font-bold text-slate-900 leading-none">Projekt-Team</h3>
               </div>
-              {isAdmin && (
+              {isAdmin && !isArchived && (
                 <button
                   onClick={() => setIsMemberModalOpen(true)}
                   className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
@@ -349,7 +412,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                         </div>
                         <span className="text-[14px] font-medium text-slate-700">{member.user.name}</span>
                       </div>
-                      {isAdmin && (
+                      {isAdmin && !isArchived && (
                         <button 
                           onClick={() => removeMemberMutation.mutate(member.userId)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -372,7 +435,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <h3 className="text-[16px] font-bold text-slate-900 leading-none">Materialliste</h3>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
-                {isAdmin && (
+                {isAdmin && !isArchived && (
                   <button
                     type="button"
                     onClick={() => setIsCategoryModalOpen(true)}
@@ -382,14 +445,16 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                     Kategorien verwalten
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { setEditingMaterial(null); setIsMaterialModalOpen(true); }}
-                  className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Material hinzufügen
-                </button>
+                {!isArchived && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingMaterial(null); setIsMaterialModalOpen(true); }}
+                    className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-blue-600 hover:text-blue-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Material hinzufügen
+                  </button>
+                )}
               </div>
             </div>
             <div className="p-6">
@@ -439,7 +504,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                                 <tr className="text-slate-400 font-semibold uppercase tracking-wider text-[11px] border-b border-slate-100">
                                   <th className="px-4 py-3">Bezeichnung</th>
                                   <th className="py-3">Anzahl</th>
-                                  <th className="py-3 text-right pr-4">Aktionen</th>
+                                  {!isArchived && <th className="py-3 text-right pr-4">Aktionen</th>}
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-50">
@@ -447,7 +512,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                                   <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
                                     <td className="py-3 pl-4 pr-3 font-medium text-slate-700">{item.name}</td>
                                     <td className="py-3 pr-3 text-slate-600">{item.quantity}</td>
-                                    <td className="py-3 text-right pr-4">
+                                    {!isArchived && <td className="py-3 text-right pr-4">
                                       <div className="responsive-card-actions flex items-center justify-end gap-1 transition-opacity">
                                         <button
                                           type="button"
@@ -470,7 +535,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                                           </button>
                                         )}
                                       </div>
-                                    </td>
+                                    </td>}
                                   </tr>
                                 ))}
                               </tbody>
@@ -492,7 +557,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               <FileText className="w-5 h-5 text-slate-400" />
               <h3 className="text-[16px] font-bold text-slate-900 leading-none">Auftrags-Dokumentation</h3>
             </div>
-            <div className="p-6 bg-slate-50 border-b border-slate-100">
+            {!isArchived && <div className="p-6 bg-slate-50 border-b border-slate-100">
               <form onSubmit={e => { e.preventDefault(); if (newNote.trim()) noteMutation.mutate(newNote); }}>
                 <textarea
                   value={newNote}
@@ -510,7 +575,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                   </button>
                 </div>
               </form>
-            </div>
+            </div>}
             <div className="divide-y divide-slate-100">
               {!project.notes || project.notes.length === 0 ? (
                  <div className="p-8 text-center text-[14px] text-slate-500">
@@ -527,7 +592,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                           {note.authorName}
                         </span>
                       </div>
-                      {note.userId === currentUser?.id && editingNoteId !== note.id && (
+                      {!isArchived && note.userId === currentUser?.id && editingNoteId !== note.id && (
                         <button
                           type="button"
                           onClick={() => {
@@ -598,7 +663,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <ImageIcon className="w-5 h-5 text-slate-400" />
                 <h3 className="text-[16px] font-bold text-slate-900 leading-none">Bilder</h3>
               </div>
-              <button 
+              {!isArchived && <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={imageMutation.isPending}
                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -606,7 +671,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 aria-label="Bild hochladen"
               >
                 <Upload className="w-5 h-5" />
-              </button>
+              </button>}
               <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -655,7 +720,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         </div>
       </div>
 
-      {isMemberModalOpen && (
+      {!isArchived && isMemberModalOpen && (
         <MemberModal 
           projectId={projectId}
           currentMembers={members || []}
@@ -668,7 +733,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         />
       )}
 
-      {isMaterialModalOpen && (
+      {!isArchived && isMaterialModalOpen && (
         <MaterialModal 
           projectId={projectId}
           material={editingMaterial}
@@ -682,7 +747,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
         />
       )}
 
-      {isCategoryModalOpen && (
+      {!isArchived && isCategoryModalOpen && (
         <MaterialCategoriesModal
           categories={materialCategories}
           onClose={() => setIsCategoryModalOpen(false)}
