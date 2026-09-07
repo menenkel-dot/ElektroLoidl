@@ -274,7 +274,7 @@ function UserModal({ user, onClose, onSuccess, hasWeeklyModel }: { user?: any, o
   const [password, setPassword] = useState(''); // Nur bei Neuanlage nötig
   const [role, setRole] = useState(user?.role || 'employee');
   const [targetHours, setTargetHours] = useState(user?.targetHoursMonthly?.toString() || '160');
-  const [vacationDays, setVacationDays] = useState(user?.vacationTotal?.toString() || '30');
+  const [vacationDays, setVacationDays] = useState(user?.vacationTotal?.toString() ?? '30');
   const [visibleItems, setVisibleItems] = useState<string[]>(user?.permissions?.visible_menu_items || ['dashboard', 'time', 'absence']);
 
   const createMutation = useMutation({
@@ -370,7 +370,7 @@ function UserModal({ user, onClose, onSuccess, hasWeeklyModel }: { user?: any, o
                 </div>
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Urlaubstage (Jahr)</label>
-                  <input required type="number" value={vacationDays} onChange={e => setVacationDays(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" />
+                  <input required min="0" max="366" step="1" type="number" value={vacationDays} onChange={e => setVacationDays(e.target.value)} className="block w-full rounded-lg border-slate-200 shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-[14px] py-2.5 px-3 border" />
                 </div>
 
                 <div className="md:col-span-2">

@@ -410,7 +410,7 @@ export const api = {
       role: p.role,
       permissions: p.permissions,
       targetHoursMonthly: p.target_hours_monthly ?? 160,
-      vacationTotal: p.vacation_total || 30,
+      vacationTotal: p.vacation_total ?? 30,
       vacationUsed: p.vacation_used || 0,
       overtimeBase: p.overtime_base || 0,
       avatarUrl: p.avatar_url
@@ -426,7 +426,7 @@ export const api = {
       ...data,
       name: `${data.first_name || ''} ${data.last_name || ''}`.trim() || 'Mitarbeiter',
       targetHoursMonthly: data.target_hours_monthly ?? 160,
-      vacationTotal: data.vacation_total || 30,
+      vacationTotal: data.vacation_total ?? 30,
       vacationUsed: data.vacation_used || 0,
       overtimeBase: data.overtime_base || 0
     };
