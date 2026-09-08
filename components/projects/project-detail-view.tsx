@@ -126,6 +126,9 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       toast.success('Bild hochgeladen');
     },
     onError: (error: Error) => toast.error(`Fehler beim Hochladen: ${error.message}`),
+    onSettled: () => {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    },
   });
 
   const deleteImageMutation = useMutation({
@@ -221,7 +224,6 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     const file = e.target.files?.[0];
     if (!file) return;
     imageMutation.mutate(file);
-    e.target.value = '';
   };
 
   const handleImageDownload = async (image: ProjectImage, index: number) => {

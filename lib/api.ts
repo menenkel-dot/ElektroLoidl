@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchAllPages } from './pagination';
+import { prepareProjectImageUpload } from './project-image-upload';
 
 type DirectoryProfile = {
   id: string;
@@ -246,24 +247,14 @@ export const api = {
   },
 
   addProjectImage: async (projectId: string, file: File) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error('Bitte wählen Sie ein Bild im Format JPG, PNG, WebP oder GIF aus.');
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      throw new Error('Das Bild darf maximal 10 MB groß sein.');
-    }
-
-    const extensionByType: Record<string, string> = {
-      'image/jpeg': 'jpg',
-      'image/png': 'png',
-      'image/webp': 'webp',
-      'image/gif': 'gif',
-    };
-    const storagePath = `${projectId}/${crypto.randomUUID()}.${extensionByType[file.type]}`;
+    const prepared = await prepareProjectImageUpload(file);
+    const storagePath = `${projectId}/${crypto.randomUUID()}.${prepared.extension}`;
     const { error: uploadError } = await supabase.storage
       .from('project-images')
-      .upload(storagePath, file, { cacheControl: '3600', contentType: file.type, upsert: false });
+      .upload(storagePath, prepared.body, { cacheControl: '3600', contentType: prepared.contentType, upsert: false });
+    if (uploadError?.message === 'No content provided') {
+      throw new Error('Das Bild konnte nicht gelesen werden. Bitte wählen Sie es erneut aus.');
+    }
     if (uploadError) throw uploadError;
 
     const { data, error } = await supabase
