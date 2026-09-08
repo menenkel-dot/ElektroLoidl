@@ -278,6 +278,32 @@ export const api = {
     return data;
   },
 
+  deleteProjectImage: async (id: string) => {
+    const { data: image, error: imageError } = await supabase
+      .from('project_images')
+      .select('id, url')
+      .eq('id', id)
+      .single();
+    if (imageError) throw imageError;
+
+    const isStorageObject = !image.url.startsWith('data:')
+      && !image.url.startsWith('http://')
+      && !image.url.startsWith('https://');
+    if (isStorageObject) {
+      const { error: storageError } = await supabase.storage
+        .from('project-images')
+        .remove([image.url]);
+      if (storageError) throw storageError;
+    }
+
+    const { error } = await supabase
+      .from('project_images')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
   getProjectMembers: async (projectId: string) => {
     const { data, error } = await supabase.from('project_members').select('*').eq('project_id', projectId);
     if (error) throw error;

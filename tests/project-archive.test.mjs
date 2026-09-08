@@ -295,11 +295,15 @@ test('image storage uses file folder, supports active reads/uploads and admin ar
     await asUser(db, employee);
     assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
     await db.query("insert into storage.objects(bucket_id,name) values('project-images',$1)", [`${project}/new.jpg`]);
+    await db.query("insert into project_images(project_id,url) values($1,$2)", [project, `${project}/new.jpg`]);
+    assert.equal((await db.query("delete from project_images where url=$1 returning id", [`${project}/new.jpg`])).rows.length, 0);
     await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('project-images','Altbestand/spoof.jpg')"), /row-level security/);
     await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('other',$1)", [`${project}/other.jpg`]), /row-level security/);
     await asUser(db, admin);
     await db.query("delete from storage.objects where name=$1", [`${project}/new.jpg`]);
+    await db.query("delete from project_images where url=$1", [`${project}/new.jpg`]);
     assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
+    assert.equal((await db.query('select * from project_images')).rows.length, 1);
     await db.query('update projects set archived_at=now() where id=$1', [project]);
     assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
     await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('project-images',$1)", [`${project}/archived.jpg`]), /row-level security/);

@@ -128,6 +128,16 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
     onError: (error: Error) => toast.error(`Fehler beim Hochladen: ${error.message}`),
   });
 
+  const deleteImageMutation = useMutation({
+    mutationFn: (image: ProjectImage) => api.deleteProjectImage(image.id),
+    onSuccess: (_data, image) => {
+      if (selectedImage?.id === image.id) setSelectedImage(null);
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      toast.success('Bild gelöscht');
+    },
+    onError: (error: Error) => toast.error(`Bild konnte nicht gelöscht werden: ${error.message}`),
+  });
+
   const removeMemberMutation = useMutation({
     mutationFn: (userId: string) => api.removeProjectMember(projectId, userId),
     onSuccess: () => {
@@ -237,6 +247,12 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Fehler beim Herunterladen.');
+    }
+  };
+
+  const handleImageDelete = (image: ProjectImage) => {
+    if (window.confirm('Soll dieses Bild wirklich dauerhaft gelöscht werden?')) {
+      deleteImageMutation.mutate(image);
     }
   };
 
@@ -702,15 +718,29 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                           <Maximize2 className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100" />
                         </span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleImageDownload(img, index)}
-                        className="absolute right-2 top-2 rounded-lg bg-white/95 p-2 text-slate-700 shadow-sm transition-colors hover:bg-blue-600 hover:text-white"
-                        title="Bild herunterladen"
-                        aria-label={`Auftragsbild ${index + 1} herunterladen`}
-                      >
-                        <Download className="h-4 w-4" />
-                      </button>
+                      <div className="absolute right-2 top-2 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleImageDownload(img, index)}
+                          className="rounded-lg bg-white/95 p-2 text-slate-700 shadow-sm transition-colors hover:bg-blue-600 hover:text-white"
+                          title="Bild herunterladen"
+                          aria-label={`Auftragsbild ${index + 1} herunterladen`}
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        {isAdmin && !isArchived && (
+                          <button
+                            type="button"
+                            onClick={() => handleImageDelete(img)}
+                            disabled={deleteImageMutation.isPending}
+                            className="rounded-lg bg-white/95 p-2 text-slate-700 shadow-sm transition-colors hover:bg-red-600 hover:text-white disabled:opacity-50"
+                            title="Bild löschen"
+                            aria-label={`Auftragsbild ${index + 1} löschen`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -778,6 +808,17 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
                 <Download className="h-4 w-4" />
                 Herunterladen
               </button>
+              {isAdmin && !isArchived && (
+                <button
+                  type="button"
+                  onClick={() => handleImageDelete(selectedImage)}
+                  disabled={deleteImageMutation.isPending}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-red-700 disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleteImageMutation.isPending ? 'Wird gelöscht...' : 'Löschen'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedImage(null)}
