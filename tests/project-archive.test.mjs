@@ -29,7 +29,10 @@ async function setup() {
       id uuid primary key,
       role text not null,
       first_name text,
-      last_name text
+      last_name text,
+      avatar_url text,
+      vacation_total integer default 30,
+      overtime_base numeric default 0
     );
     create table public.projects (
       id uuid primary key,
@@ -80,6 +83,7 @@ async function setup() {
       date date not null,
       start_time time not null,
       end_time time not null,
+      duration_minutes integer not null default 60,
       material_recorded_confirmed boolean not null default false
     );
     create table storage.objects (
@@ -94,6 +98,8 @@ async function setup() {
     grant execute on function private.is_admin() to authenticated, service_role;
 
     alter table public.projects enable row level security;
+    alter table public.profiles enable row level security;
+    create policy profiles_select on public.profiles for select to authenticated using (true);
     alter table public.assignments enable row level security;
     alter table public.services enable row level security;
     alter table public.project_members enable row level security;
@@ -154,6 +160,7 @@ async function setup() {
     insert into storage.objects(bucket_id, name) values ('project-images', '${project}/existing.jpg');
   `);
   await db.exec(migration);
+  await db.exec(await readFile(new URL('../supabase/migrations/20260907201059_fix_audit_findings.sql', import.meta.url), 'utf8'));
   return db;
 }
 
@@ -250,4 +257,54 @@ test('employees can no longer change project membership or services', async () =
   } finally {
     await db.close();
   }
+});
+
+test('employee can read only own private profile, directory exposes names only, admin can read all', async () => {
+  const db = await setup();
+  try {
+    await asUser(db, employee);
+    assert.deepEqual((await db.query('select id from profiles')).rows.map(p => p.id), [employee]);
+    const directory = (await db.query('select * from get_employee_directory()')).rows;
+    assert.equal(directory.length, 3);
+    assert.deepEqual(Object.keys(directory[0]).sort(), ['avatar_url', 'first_name', 'id', 'last_name', 'role']);
+    assert.equal(directory.find(p => p.id === otherEmployee).first_name, 'Olivia');
+    await asUser(db, admin);
+    assert.equal((await db.query('select * from profiles')).rows.length, 3);
+    await db.exec("reset role; set role anon; select set_config('request.jwt.claim.sub','',false)");
+    await assert.rejects(db.query('select * from get_employee_directory()'), /permission denied/);
+  } finally { await db.close(); }
+});
+
+test('time durations cannot exceed attendance or become nonpositive, legitimate pauses survive', async () => {
+  const db = await setup();
+  try {
+    await asUser(db, employee);
+    for (const minutes of [-10, 0, 121]) {
+      await assert.rejects(db.query('update time_entries set duration_minutes=$1 where user_id=$2', [minutes, employee]), /time_entries_valid_duration/);
+    }
+    await db.query('update time_entries set duration_minutes=90 where user_id=$1', [employee]);
+    assert.equal((await db.query('select duration_minutes from time_entries')).rows[0].duration_minutes, 90);
+    await assert.rejects(db.query("insert into time_entries(project_id,user_id,date,start_time,end_time,duration_minutes,material_recorded_confirmed) values($1,$2,current_date,'14:00','15:00',600,true)", [project, employee]), /time_entries_valid_duration/);
+    await assert.rejects(db.query("update time_entries set end_time='08:30' where user_id=$1", [employee]), /time_entries_valid_duration/);
+  } finally { await db.close(); }
+});
+
+test('image storage uses file folder, supports active reads/uploads and admin archive reads', async () => {
+  const db = await setup();
+  try {
+    await asUser(db, employee);
+    assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
+    await db.query("insert into storage.objects(bucket_id,name) values('project-images',$1)", [`${project}/new.jpg`]);
+    await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('project-images','Altbestand/spoof.jpg')"), /row-level security/);
+    await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('other',$1)", [`${project}/other.jpg`]), /row-level security/);
+    await asUser(db, admin);
+    await db.query("delete from storage.objects where name=$1", [`${project}/new.jpg`]);
+    assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
+    await db.query('update projects set archived_at=now() where id=$1', [project]);
+    assert.equal((await db.query('select * from storage.objects')).rows.length, 1);
+    await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('project-images',$1)", [`${project}/archived.jpg`]), /row-level security/);
+    await asUser(db, employee);
+    assert.equal((await db.query('select * from storage.objects')).rows.length, 0);
+    await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('project-images',$1)", [`${project}/archived.jpg`]), /row-level security/);
+  } finally { await db.close(); }
 });

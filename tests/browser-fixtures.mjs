@@ -27,11 +27,14 @@ const session = { access_token: 'fixture.fake.token', refresh_token: 'fixture-re
 const balance = { user_id: employeeId, balance_hours: 15, today_target_hours: 5, month_target_hours: 173, accounting_since: '2026-09-01' };
 const preview = { token: 'fixture-preview', effective_from: '2026-09-01', before: balance, after: { ...balance, balance_hours: 17.68 }, vacation_refund_days: 0,
   absence_changes: [{ id: 'fixture', type: 'comp_time', start_date: '2026-09-04', end_date: '2026-09-04', old_hours: 7.68, new_hours: 5, old_days: 0, new_days: 0 }] };
-function response(request) {
+function responseData(request) {
   const url = new URL(request.url);
   if (url.pathname.endsWith('/user')) return authUser;
   if (url.pathname.endsWith('/token')) return session;
-  if (url.pathname.endsWith('/profiles')) return url.searchParams.has('id') ? profile : [admin, employee];
+  if (url.pathname.endsWith('/profiles')) return url.searchParams.has('id') ? profile : role === 'employee' ? [employee] : [admin, employee];
+  if (url.pathname.endsWith('/get_employee_directory')) return [admin, employee].map(({ id, first_name, last_name, role }) => ({ id, first_name, last_name, role, avatar_url: null }));
+  if (url.pathname.endsWith('/project_notes')) return [{ id: 'note-1', project_id: projectId, user_id: adminId, text: 'Dokumentation vom Administrator', created_at: '2026-09-03T10:30:00Z' }];
+  if (url.pathname.endsWith('/project_members')) return [{ id: 'member-1', project_id: projectId, user_id: adminId }];
   if (url.pathname.endsWith('/projects')) {
     const projects = [
       { id: projectId, name: 'Neubau Musterstraße', client_id: null, archived_at: null, archived_by: null },
@@ -46,6 +49,16 @@ function response(request) {
   if (url.pathname.endsWith('/get_project_time_summary')) return {total_minutes:810,count:3,members:[{user_id:employeeId,name:'Muster Mitarbeiter',minutes:810}],entries:[1,2,3].map(i=>({id:`entry-${i}`,name:'Muster Mitarbeiter',date:'2026-09-03',start_time:'08:00:00',end_time:'12:30:00',duration_minutes:270,description:'Elektroinstallation Erdgeschoss und Prüfung der Leitungen'}))};
   if (url.pathname.endsWith('/preview_work_model') || url.pathname.endsWith('/save_work_model')) return preview;
   return [];
+}
+function response(request) {
+  const data = responseData(request);
+  const url = new URL(request.url);
+  if (Array.isArray(data) && url.searchParams.has('offset')) {
+    const offset = Number(url.searchParams.get('offset'));
+    const limit = Number(url.searchParams.get('limit') || 500);
+    return data.slice(offset, offset + limit);
+  }
+  return data;
 }
 ws.addEventListener('message', async event => {
   const message = JSON.parse(event.data);

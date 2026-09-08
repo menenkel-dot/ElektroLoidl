@@ -1,5 +1,20 @@
 import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
+import { fetchAllPages } from './pagination';
+
+type DirectoryProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  role: string;
+};
+
+async function getEmployeeDirectory(): Promise<DirectoryProfile[]> {
+  return fetchAllPages<DirectoryProfile>((from, to) =>
+    supabase.rpc('get_employee_directory').order('id').range(from, to),
+  );
+}
 
 type TimeEntryFilters = {
   startDate?: string;
@@ -123,10 +138,11 @@ export const api = {
     if (pError) throw pError;
     const { data: notes, error: notesError } = await supabase
       .from('project_notes')
-      .select('id, text, created_at, user_id, author:profiles!project_notes_user_id_fkey(first_name, last_name)')
+      .select('id, text, created_at, user_id')
       .eq('project_id', id)
       .order('created_at', { ascending: false });
     if (notesError) throw notesError;
+    const directory = new Map((await getEmployeeDirectory()).map(profile => [profile.id, profile]));
     const { data: images, error: imagesError } = await supabase.from('project_images').select('*').eq('project_id', id).order('created_at', { ascending: false });
     if (imagesError) throw imagesError;
     const resolvedImages = await Promise.all((images || []).map(async image => {
@@ -146,7 +162,7 @@ export const api = {
       archivedBy: project.archived_by,
       isArchived: Boolean(project.archived_at),
       notes: notes?.map(n => {
-        const author = Array.isArray(n.author) ? n.author[0] : n.author;
+        const author = directory.get(n.user_id);
         const authorName = author
           ? `${author.first_name || ''} ${author.last_name || ''}`.trim() || 'Mitarbeiter'
           : 'Verfasser nicht verfügbar';
@@ -263,31 +279,33 @@ export const api = {
   },
 
   getProjectMembers: async (projectId: string) => {
-    const { data, error } = await supabase.from('project_members').select('*, profiles(*)').eq('project_id', projectId);
+    const { data, error } = await supabase.from('project_members').select('*').eq('project_id', projectId);
     if (error) throw error;
+    const directory = new Map((await getEmployeeDirectory()).map(profile => [profile.id, profile]));
     return data.map(m => ({
       id: m.id,
       projectId: m.project_id,
       userId: m.user_id,
       user: {
-        id: m.profiles.id,
-        name: `${m.profiles.first_name || ''} ${m.profiles.last_name || ''}`.trim() || 'Mitarbeiter',
-        avatarUrl: m.profiles.avatar_url
+        id: m.user_id,
+        name: `${directory.get(m.user_id)?.first_name || ''} ${directory.get(m.user_id)?.last_name || ''}`.trim() || 'Mitarbeiter',
+        avatarUrl: directory.get(m.user_id)?.avatar_url
       }
     }));
   },
 
   getAllProjectMembers: async () => {
-    const { data, error } = await supabase.from('project_members').select('*, profiles(*)');
+    const { data, error } = await supabase.from('project_members').select('*');
     if (error) throw error;
+    const directory = new Map((await getEmployeeDirectory()).map(profile => [profile.id, profile]));
     return data.map(m => ({
       id: m.id,
       projectId: m.project_id,
       userId: m.user_id,
       user: {
-        id: m.profiles.id,
-        name: `${m.profiles.first_name || ''} ${m.profiles.last_name || ''}`.trim() || 'Mitarbeiter',
-        avatarUrl: m.profiles.avatar_url
+        id: m.user_id,
+        name: `${directory.get(m.user_id)?.first_name || ''} ${directory.get(m.user_id)?.last_name || ''}`.trim() || 'Mitarbeiter',
+        avatarUrl: directory.get(m.user_id)?.avatar_url
       }
     }));
   },
@@ -400,8 +418,12 @@ export const api = {
   },
 
   getUsers: async () => {
-    const { data, error } = await supabase.from('profiles').select('*');
-    if (error) throw error;
+    const [directory, profiles] = await Promise.all([
+      getEmployeeDirectory(),
+      fetchAllPages((from, to) => supabase.from('profiles').select('*').order('id').range(from, to)),
+    ]);
+    const privateProfiles = new Map(profiles.map(profile => [profile.id, profile]));
+    const data = directory.map(profile => ({ ...profile, ...privateProfiles.get(profile.id) }));
     return data.map(p => ({
       id: p.id,
       firstName: p.first_name,
@@ -472,14 +494,17 @@ export const api = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
 
-    let query = supabase.from('time_entries').select('*');
-    if (filters.startDate) query = query.gte('date', filters.startDate);
-    if (filters.endDate) query = query.lte('date', filters.endDate);
-    if (filters.projectId) query = query.eq('project_id', filters.projectId);
-    if (filters.userId) query = query.eq('user_id', filters.userId);
-
-    const { data, error } = await query.order('date', { ascending: false }).order('start_time', { ascending: false });
-    if (error) throw error;
+    const data = await fetchAllPages((from, to) => {
+      let query = supabase.from('time_entries').select('*');
+      if (filters.startDate) query = query.gte('date', filters.startDate);
+      if (filters.endDate) query = query.lte('date', filters.endDate);
+      if (filters.projectId) query = query.eq('project_id', filters.projectId);
+      if (filters.userId) query = query.eq('user_id', filters.userId);
+      return query.order('date', { ascending: false })
+        .order('start_time', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to);
+    });
     return data.map(e => ({
       id: e.id,
       userId: e.user_id,
@@ -536,6 +561,9 @@ export const api = {
       material_recorded_confirmed: entry.materialRecordedConfirmed === true,
     };
     const { data, error } = await supabase.from('time_entries').insert([dbEntry]).select().single();
+    if (error?.message.includes('time_entries_valid_duration')) {
+      throw new Error('Die gebuchte Arbeitszeit muss positiv sein und innerhalb des angegebenen Zeitraums liegen. Bitte prüfen Sie die Pause.');
+    }
     if (error?.code === '23P01') {
       throw new Error('Für diesen Mitarbeiter besteht im gewählten Zeitraum bereits ein Zeiteintrag.');
     }
@@ -556,6 +584,9 @@ export const api = {
       description: entry.description,
     };
     const { data, error } = await supabase.from('time_entries').update(dbEntry).eq('id', id).select().single();
+    if (error?.message.includes('time_entries_valid_duration')) {
+      throw new Error('Die gebuchte Arbeitszeit muss positiv sein und innerhalb des angegebenen Zeitraums liegen. Bitte prüfen Sie die Pause.');
+    }
     if (error?.code === '23P01') {
       throw new Error('Für diesen Mitarbeiter besteht im gewählten Zeitraum bereits ein Zeiteintrag.');
     }

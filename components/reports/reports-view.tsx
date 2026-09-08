@@ -38,7 +38,7 @@ export function ReportsView() {
   const { data: currentUser, isLoading: profileLoading } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
 
-  const { data: entries, isLoading: entriesLoading } = useQuery({
+  const { data: entries, isLoading: entriesLoading, isError: entriesFailed, refetch: reloadEntries } = useQuery({
     queryKey: ['reportEntries', startDate, endDate, filterProject, isAdmin ? filterUser : 'own'],
     queryFn: () => api.getTimeEntries({
       startDate: startDate || undefined,
@@ -191,6 +191,12 @@ export function ReportsView() {
   };
 
   if (isLoading) return <div className="text-slate-500 animate-pulse font-medium">Lade Berichtsdaten...</div>;
+  if (entriesFailed) return (
+    <div role="alert" className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-5 text-red-800">
+      <p>Die Arbeitszeiten konnten nicht vollständig geladen werden. Bitte laden Sie den Bericht erneut.</p>
+      <button type="button" onClick={() => reloadEntries()} className="rounded-lg border border-red-300 px-3 py-2 font-semibold">Erneut versuchen</button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">

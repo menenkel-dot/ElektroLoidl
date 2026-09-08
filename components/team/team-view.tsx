@@ -100,7 +100,7 @@ export function TeamView() {
                 </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-4">
+              {(isAdmin || user.id === currentUser?.id) && <div className="mt-4 grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-2 text-[12px] text-slate-600">
                    <Clock className="w-3.5 h-3.5 text-slate-400" />
                    <span>{modelFor(user.id)?.daily_minutes ? `${formatHours(modelFor(user.id)!.daily_minutes!.reduce((sum,minutes) => sum + minutes,0) / 60)} h / Woche` : `${user.targetHoursMonthly} h / Monat`}</span>
@@ -109,9 +109,9 @@ export function TeamView() {
                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
                    <span>{user.vacationTotal} Tage Urlaub</span>
                 </div>
-              </div>
+              </div>}
               
-              <div className="mt-6 pt-4 border-t border-slate-50">
+              {(isAdmin || user.id === currentUser?.id) && <div className="mt-6 pt-4 border-t border-slate-50">
                  <div className="text-[12px] font-semibold text-slate-400 uppercase tracking-wider mb-3">Sichtbare Menüpunkte</div>
                  <div className="flex flex-wrap gap-1.5">
                    {user.permissions?.visible_menu_items?.map((pId: string) => {
@@ -123,7 +123,7 @@ export function TeamView() {
                      );
                    })}
                  </div>
-              </div>
+              </div>}
             </div>
             {isAdmin && (
               <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex flex-wrap justify-between items-center gap-2">
