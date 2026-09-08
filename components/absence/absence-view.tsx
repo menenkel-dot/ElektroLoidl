@@ -23,6 +23,8 @@ interface AbsenceUser {
   id: string;
   name: string;
   role: string;
+  vacationTotal?: number;
+  vacationUsed?: number;
 }
 
 const typeLabels: Record<AbsenceType, string> = {
@@ -44,7 +46,15 @@ export function AbsenceView() {
   
   const { data: currentUser } = useQuery({ queryKey: ['currentUser'], queryFn: api.getCurrentUser });
   const isAdmin = currentUser?.role === 'admin';
-  const { data: users } = useQuery({ queryKey: ['users'], queryFn: api.getUsers, enabled: isAdmin });
+  const {
+    data: users,
+    isLoading: areUsersLoading,
+    isError: isUsersError,
+    refetch: refetchUsers,
+  } = useQuery({ queryKey: ['users'], queryFn: api.getUsers, enabled: isAdmin });
+  const employeeVacationBalances = (users || [])
+    .filter(user => user.role === 'employee')
+    .sort((a, b) => a.name.localeCompare(b.name, 'de'));
 
   const updateStatusMutation = useMutation({
     onError: (error: Error) => toast.error(error.message),
@@ -101,6 +111,60 @@ export function AbsenceView() {
           {isAdmin ? 'Abwesenheit eintragen' : 'Antrag stellen'}
         </button>
       </div>
+
+      {isAdmin && (
+        <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm" aria-labelledby="vacation-balances-heading">
+          <div className="border-b border-gray-100 px-5 py-4 sm:px-6">
+            <h3 id="vacation-balances-heading" className="text-base font-semibold text-gray-900">Urlaubskonten der Mitarbeiter</h3>
+            <p className="mt-1 text-sm text-gray-500">Genommen werden ausschließlich genehmigte Urlaubstage berücksichtigt.</p>
+          </div>
+
+          {areUsersLoading ? (
+            <div className="px-6 py-8 text-sm text-slate-500">Lade Urlaubskonten...</div>
+          ) : isUsersError ? (
+            <div className="px-6 py-8 text-sm text-red-600">
+              Die Urlaubskonten konnten nicht geladen werden.{' '}
+              <button type="button" onClick={() => refetchUsers()} className="font-semibold underline underline-offset-2">
+                Erneut versuchen
+              </button>
+            </div>
+          ) : employeeVacationBalances.length === 0 ? (
+            <div className="px-6 py-8 text-sm italic text-slate-500">Keine Mitarbeiter vorhanden.</div>
+          ) : (
+            <div className="grid gap-px bg-gray-100 sm:grid-cols-2 xl:grid-cols-3">
+              {employeeVacationBalances.map(user => {
+                const total = user.vacationTotal ?? 0;
+                const used = user.vacationUsed ?? 0;
+                const remaining = total - used;
+                const progress = total > 0 ? Math.min(100, Math.max(0, (used / total) * 100)) : 0;
+
+                return (
+                  <article key={user.id} className="bg-white p-5 sm:p-6">
+                    <p className="truncate text-sm font-semibold text-gray-900" title={user.name}>{user.name}</p>
+                    <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                      <div>
+                        <p className="text-xl font-semibold text-gray-900">{total}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Anspruch</p>
+                      </div>
+                      <div>
+                        <p className="text-xl font-semibold text-blue-600">{used}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Genommen</p>
+                      </div>
+                      <div>
+                        <p className={`text-xl font-semibold ${remaining < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{remaining}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Verfügbar</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                      <div className="h-full rounded-full bg-blue-600" style={{ width: `${progress}%` }} />
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <ul role="list" className="divide-y divide-gray-100">
