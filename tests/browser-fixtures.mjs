@@ -18,6 +18,14 @@ const adminId = '10000000-0000-0000-0000-000000000001';
 const employeeId = '10000000-0000-0000-0000-000000000002';
 const projectId = '20000000-0000-0000-0000-000000000001';
 const archivedProjectId = '20000000-0000-0000-0000-000000000002';
+const reportProjects = [
+  { id: projectId, name: 'Neubau Musterstraße' },
+  { id: archivedProjectId, name: 'Sanierung Altbau' },
+  ...Array.from({ length: 7 }, (_, index) => ({
+    id: `20000000-0000-0000-0000-${String(index + 3).padStart(12, '0')}`,
+    name: `Langer Auftragsname für Legendentest ${index + 1}`,
+  })),
+];
 const permissions = { visible_menu_items: ['dashboard','clients','projects','schedule','time','absence','team','reports'] };
 const admin = { id: adminId, first_name: 'Test', last_name: 'Admin', role: 'admin', target_hours_monthly: 160, vacation_total: 30, vacation_used: 0, overtime_base: 20, permissions };
 const employee = { ...admin, id: employeeId, first_name: 'Muster', last_name: 'Mitarbeiter', role: 'employee', target_hours_monthly: 169, overtime_base: 15 };
@@ -35,11 +43,23 @@ function responseData(request) {
   if (url.pathname.endsWith('/get_employee_directory')) return [admin, employee].map(({ id, first_name, last_name, role }) => ({ id, first_name, last_name, role, avatar_url: null }));
   if (url.pathname.endsWith('/project_notes')) return [{ id: 'note-1', project_id: projectId, user_id: adminId, text: 'Dokumentation vom Administrator', created_at: '2026-09-03T10:30:00Z' }];
   if (url.pathname.endsWith('/project_members')) return [{ id: 'member-1', project_id: projectId, user_id: adminId }];
+  if (url.pathname.endsWith('/time_entries')) return reportProjects.map((project, index) => ({
+    id: `30000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
+    user_id: index % 2 ? employeeId : adminId,
+    project_id: project.id,
+    date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    start_time: '08:00:00',
+    end_time: '12:00:00',
+    duration_minutes: 240,
+    description: 'Testbuchung für die Berichtsansicht',
+  }));
   if (url.pathname.endsWith('/projects')) {
-    const projects = [
-      { id: projectId, name: 'Neubau Musterstraße', client_id: null, archived_at: null, archived_by: null },
-      { id: archivedProjectId, name: 'Sanierung Altbau', client_id: null, archived_at: '2026-09-05T12:00:00Z', archived_by: adminId },
-    ];
+    const projects = reportProjects.map(project => ({
+      ...project,
+      client_id: null,
+      archived_at: project.id === archivedProjectId ? '2026-09-05T12:00:00Z' : null,
+      archived_by: project.id === archivedProjectId ? adminId : null,
+    }));
     if (!url.searchParams.has('id')) return projects;
     return url.searchParams.get('id')?.includes(archivedProjectId) ? projects[1] : projects[0];
   }

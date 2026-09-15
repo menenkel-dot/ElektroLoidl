@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Briefcase, CalendarDays, Clock, Download, FileText, Filter, TrendingUp, Users } from 'lucide-react';
 import { endOfMonth, endOfYear, format, parseISO, startOfMonth, startOfYear, subMonths } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -271,8 +271,20 @@ export function ReportsView() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#CBD5E1" /><XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 11 }} dy={10} /><YAxis axisLine={false} tickLine={false} tick={{ fill: '#94A3B8', fontSize: 11 }} /><RechartsTooltip formatter={(value) => [`${Number(value).toFixed(1)} h`, 'Stunden']} /><Bar dataKey="Stunden" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={40} />
               </BarChart>
             </ChartCard>
-            <ChartCard title="Verteilung nach Aufträgen">
-              <PieChart><Pie data={report.projectData} cx="50%" cy="45%" innerRadius={65} outerRadius={100} paddingAngle={4} dataKey="value" stroke="none">{report.projectData.map((project, index) => <Cell key={project.id} fill={COLORS[index % COLORS.length]} />)}</Pie><RechartsTooltip formatter={(value) => [`${Number(value).toFixed(1)} h`, 'Stunden']} /><Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }} /></PieChart>
+            <ChartCard
+              title="Verteilung nach Aufträgen"
+              footer={(
+                <div className="mt-3 grid max-h-24 grid-cols-1 gap-x-4 gap-y-2 overflow-y-auto pr-1 sm:grid-cols-2" aria-label="Legende der Auftragsverteilung">
+                  {report.projectData.map((project, index) => (
+                    <div key={project.id} className="flex min-w-0 items-center gap-2 text-[12px] text-slate-600">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} aria-hidden="true" />
+                      <span className="truncate" title={project.name}>{project.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            >
+              <PieChart><Pie data={report.projectData} cx="50%" cy="50%" innerRadius={65} outerRadius={100} paddingAngle={4} dataKey="value" stroke="none">{report.projectData.map((project, index) => <Cell key={project.id} fill={COLORS[index % COLORS.length]} />)}</Pie><RechartsTooltip formatter={(value) => [`${Number(value).toFixed(1)} h`, 'Stunden']} /></PieChart>
             </ChartCard>
           </div>
 
@@ -298,8 +310,8 @@ function SummaryCard({ icon: Icon, label, value, color }: { icon: typeof Clock; 
   return <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm"><div className="flex items-center gap-3 mb-3"><div className={`p-2 rounded-lg ${colors[color]}`}><Icon className="w-5 h-5" /></div><span className="text-[12px] font-semibold text-slate-500 uppercase tracking-wider">{label}</span></div><div className="text-[28px] font-bold text-slate-900 leading-none">{value}</div></div>;
 }
 
-function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-[400px]"><h3 className="text-[16px] font-bold text-slate-900 mb-6">{title}</h3><div className="flex-1 w-full min-h-0"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div></section>;
+function ChartCard({ title, children, footer }: { title: string; children: React.ReactNode; footer?: React.ReactNode }) {
+  return <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col h-[400px]"><h3 className="text-[16px] font-bold text-slate-900 mb-6">{title}</h3><div className="flex-1 w-full min-h-0"><ResponsiveContainer width="100%" height="100%">{children}</ResponsiveContainer></div>{footer}</section>;
 }
 
 function RankingCard({ title, icon: Icon, data, totalHours }: { title: string; icon: typeof Clock; data: Array<{ id: string; name: string; value: number }>; totalHours: number }) {
