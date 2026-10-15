@@ -113,13 +113,15 @@ export const api = {
   },
 
   getProjects: async ({ includeArchived = false }: { includeArchived?: boolean } = {}) => {
-    let query = supabase
-      .from('projects')
-      .select('id, client_id, name, archived_at, archived_by')
-      .order('created_at', { ascending: false });
-    if (!includeArchived) query = query.is('archived_at', null);
-    const { data, error } = await query;
-    if (error) throw error;
+    const data = await fetchAllPages((from, to) => {
+      let query = supabase
+        .from('projects')
+        .select('id, client_id, name, archived_at, archived_by')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false });
+      if (!includeArchived) query = query.is('archived_at', null);
+      return query.range(from, to);
+    });
     return data.map(p => ({
       id: p.id,
       clientId: p.client_id,
@@ -137,12 +139,13 @@ export const api = {
       .eq('id', id)
       .single();
     if (pError) throw pError;
-    const { data: notes, error: notesError } = await supabase
+    const notes = await fetchAllPages((from, to) => supabase
       .from('project_notes')
       .select('id, text, created_at, user_id')
       .eq('project_id', id)
-      .order('created_at', { ascending: false });
-    if (notesError) throw notesError;
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to));
     const directory = new Map((await getEmployeeDirectory()).map(profile => [profile.id, profile]));
     const { data: images, error: imagesError } = await supabase.from('project_images').select('*').eq('project_id', id).order('created_at', { ascending: false });
     if (imagesError) throw imagesError;
@@ -623,15 +626,15 @@ export const api = {
 
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
     
-    let query = supabase.from('absences').select('*');
-    if (filters.startDate) query = query.gte('end_date', filters.startDate);
-    if (filters.endDate) query = query.lte('start_date', filters.endDate);
-    if (profile?.role !== 'admin') {
-      query = query.eq('user_id', user.id);
-    }
-    
-    const { data, error } = await query.order('start_date', { ascending: false });
-    if (error) throw error;
+    const data = await fetchAllPages((from, to) => {
+      let query = supabase.from('absences').select('*');
+      if (filters.startDate) query = query.gte('end_date', filters.startDate);
+      if (filters.endDate) query = query.lte('start_date', filters.endDate);
+      if (profile?.role !== 'admin') query = query.eq('user_id', user.id);
+      return query.order('start_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, to);
+    });
     return data.map(a => ({ 
       id: a.id, 
       userId: a.user_id, 
@@ -691,8 +694,12 @@ export const api = {
   },
 
   getAssignments: async () => {
-    const { data, error } = await supabase.from('assignments').select('*').order('date').order('start_time');
-    if (error) throw error;
+    const data = await fetchAllPages((from, to) => supabase.from('assignments')
+      .select('*')
+      .order('date')
+      .order('start_time')
+      .order('id')
+      .range(from, to));
     return data.map(asg => ({
       id: asg.id,
       userId: asg.user_id,
