@@ -9,6 +9,7 @@ import { endOfMonth, endOfYear, format, parseISO, startOfMonth, startOfYear, sub
 import { de } from 'date-fns/locale';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+const UNAVAILABLE_PROJECT = 'Auftrag nicht verfügbar';
 
 type PeriodPreset = 'current_month' | 'previous_month' | 'current_year' | 'all' | 'custom';
 
@@ -77,7 +78,7 @@ export function ReportsView() {
 
     const barData = Array.from(hoursPerDay, ([date, hours]) => ({ date, name: format(parseISO(date), 'dd.MM.', { locale: de }), Stunden: Number(hours.toFixed(2)) }))
       .sort((a, b) => a.date.localeCompare(b.date));
-    const projectData = Array.from(hoursPerProject, ([projectId, hours]) => ({ id: projectId, name: projectMap.get(projectId) || 'Unbekannter Auftrag', value: Number(hours.toFixed(2)) }))
+    const projectData = Array.from(hoursPerProject, ([projectId, hours]) => ({ id: projectId, name: projectMap.get(projectId) || UNAVAILABLE_PROJECT, value: Number(hours.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
     const employeeData = Array.from(hoursPerUser, ([userId, hours]) => ({ id: userId, name: userMap.get(userId) || 'Unbekannter Mitarbeiter', value: Number(hours.toFixed(2)) }))
       .sort((a, b) => b.value - a.value);
@@ -102,7 +103,7 @@ export function ReportsView() {
     const rows = report.entries.map(entry => [
       entry.date,
       userMap.get(entry.userId) || currentUser?.name || 'Mitarbeiter',
-      projectMap.get(entry.projectId) || 'Unbekannter Auftrag',
+      projectMap.get(entry.projectId) || UNAVAILABLE_PROJECT,
       entry.startTime?.substring(0, 5) || '',
       entry.endTime?.substring(0, 5) || '',
       (entry.durationMinutes / 60).toFixed(2).replace('.', ','),
@@ -159,7 +160,7 @@ export function ReportsView() {
     const tableBody = report.entries.map(entry => {
       const common = [
         format(parseISO(entry.date), 'dd.MM.yyyy'),
-        projectMap.get(entry.projectId) || 'Unbekannt',
+        projectMap.get(entry.projectId) || UNAVAILABLE_PROJECT,
         `${entry.startTime?.substring(0, 5) || ''} - ${entry.endTime?.substring(0, 5) || ''}`,
         `${(entry.durationMinutes / 60).toFixed(2)} h`,
         entry.description || '-',
@@ -295,7 +296,7 @@ export function ReportsView() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left text-[13px]">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Datum</th>{isAdmin && <th className="px-5 py-3">Mitarbeiter</th>}<th className="px-5 py-3">Auftrag</th><th className="px-5 py-3">Zeit</th><th className="px-5 py-3 text-right">Stunden</th><th className="px-5 py-3">Beschreibung</th></tr></thead>
-                <tbody className="divide-y divide-slate-100">{report.entries.map(entry => <tr key={entry.id} className="hover:bg-slate-50/50"><td className="px-5 py-3 font-medium text-slate-700">{format(parseISO(entry.date), 'dd.MM.yyyy')}</td>{isAdmin && <td className="px-5 py-3 text-slate-600">{userMap.get(entry.userId) || 'Unbekannt'}</td>}<td className="px-5 py-3 text-slate-700">{projectMap.get(entry.projectId) || 'Unbekannt'}</td><td className="px-5 py-3 text-slate-500">{entry.startTime?.substring(0, 5)}–{entry.endTime?.substring(0, 5)}</td><td className="px-5 py-3 text-right font-semibold text-slate-900">{(entry.durationMinutes / 60).toFixed(2)} h</td><td className="px-5 py-3 text-slate-500">{entry.description || '–'}</td></tr>)}</tbody>
+                <tbody className="divide-y divide-slate-100">{report.entries.map(entry => <tr key={entry.id} className="hover:bg-slate-50/50"><td className="px-5 py-3 font-medium text-slate-700">{format(parseISO(entry.date), 'dd.MM.yyyy')}</td>{isAdmin && <td className="px-5 py-3 text-slate-600">{userMap.get(entry.userId) || 'Unbekannt'}</td>}<td className="px-5 py-3 text-slate-700">{projectMap.get(entry.projectId) || UNAVAILABLE_PROJECT}</td><td className="px-5 py-3 text-slate-500">{entry.startTime?.substring(0, 5)}–{entry.endTime?.substring(0, 5)}</td><td className="px-5 py-3 text-right font-semibold text-slate-900">{(entry.durationMinutes / 60).toFixed(2)} h</td><td className="px-5 py-3 text-slate-500">{entry.description || '–'}</td></tr>)}</tbody>
               </table>
             </div>
           </section>

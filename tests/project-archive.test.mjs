@@ -9,6 +9,7 @@ const otherEmployee = '10000000-0000-0000-0000-000000000003';
 const project = '20000000-0000-0000-0000-000000000001';
 const blockedProject = '20000000-0000-0000-0000-000000000002';
 const migration = await readFile(new URL('../supabase/migrations/20260907145954_archive_projects.sql', import.meta.url), 'utf8');
+const documentsMigration = await readFile(new URL('../supabase/migrations/20261109081457_project_documents_and_assignment_access.sql', import.meta.url), 'utf8');
 
 async function setup() {
   const db = new PGlite();
@@ -22,7 +23,7 @@ async function setup() {
     $$;
     grant execute on function auth.uid() to authenticated, service_role;
     create function storage.foldername(path text) returns text[] language sql stable as $$
-      select string_to_array(path, '/')
+      select (string_to_array(path, '/'))[1:cardinality(string_to_array(path, '/')) - 1]
     $$;
 
     create table public.profiles (
@@ -85,6 +86,10 @@ async function setup() {
       end_time time not null,
       duration_minutes integer not null default 60,
       material_recorded_confirmed boolean not null default false
+    );
+    create table storage.buckets (
+      id text primary key, name text not null, public boolean,
+      file_size_limit bigint, allowed_mime_types text[]
     );
     create table storage.objects (
       id uuid primary key default gen_random_uuid(),
@@ -161,6 +166,7 @@ async function setup() {
   `);
   await db.exec(migration);
   await db.exec(await readFile(new URL('../supabase/migrations/20260907201059_fix_audit_findings.sql', import.meta.url), 'utf8'));
+  await db.exec(documentsMigration);
   return db;
 }
 
@@ -209,7 +215,7 @@ test('archived projects are read-only, but admins can correct existing time entr
     await db.query('update projects set archived_at = now() where id = $1', [project]);
 
     await asUser(db, employee);
-    assert.equal((await db.query('select count(*)::int as count from projects where id = $1', [project])).rows[0].count, 1);
+    assert.equal((await db.query('select count(*)::int as count from projects where id = $1', [project])).rows[0].count, 0);
     assert.equal((await db.query('select count(*)::int as count from project_notes where project_id = $1', [project])).rows[0].count, 0);
     assert.equal((await db.query('select count(*)::int as count from project_images where project_id = $1', [project])).rows[0].count, 0);
     assert.equal((await db.query("select count(*)::int as count from storage.objects where name = $1", [`${project}/existing.jpg`])).rows[0].count, 0);
@@ -310,5 +316,55 @@ test('image storage uses file folder, supports active reads/uploads and admin ar
     await asUser(db, employee);
     assert.equal((await db.query('select * from storage.objects')).rows.length, 0);
     await assert.rejects(db.query("insert into storage.objects(bucket_id,name) values('project-images',$1)", [`${project}/archived.jpg`]), /row-level security/);
+  } finally { await db.close(); }
+});
+
+test('team or schedule grants access and removing the last assignment hides project contents', async () => {
+  const db = await setup();
+  try {
+    await asUser(db, employee);
+    assert.equal((await db.query('select id from projects')).rows.length, 2);
+    await asUser(db, otherEmployee);
+    for (const table of ['projects', 'assignments', 'project_members', 'project_images', 'project_notes', 'project_materials', 'services', 'storage.objects']) {
+      assert.equal((await db.query(`select * from ${table}`)).rows.length, 0, table);
+    }
+    await assert.rejects(db.query("insert into time_entries(project_id,user_id,date,start_time,end_time,material_recorded_confirmed) values($1,$2,current_date,'10:00','11:00',true)", [project, otherEmployee]), /row-level security/);
+    await asUser(db, admin);
+    await db.query('delete from assignments where project_id = $1', [project]);
+    await asUser(db, employee);
+    assert.equal((await db.query('select id from projects where id = $1', [project])).rows.length, 1);
+    await asUser(db, admin);
+    await db.query('delete from project_members where project_id = $1', [project]);
+    await asUser(db, employee);
+    assert.equal((await db.query('select id from projects where id = $1', [project])).rows.length, 0);
+    assert.equal((await db.query('select id from time_entries where project_id = $1', [project])).rows.length, 1);
+    assert.equal((await db.query("update time_entries set end_time = '11:00' where project_id = $1 returning id", [project])).rows.length, 0);
+  } finally { await db.close(); }
+});
+
+test('private documents follow assignment and archive policies and block deletion until cleaned up', async () => {
+  const db = await setup();
+  const key = `${project}/test.pdf`;
+  const upload = "insert into storage.objects(bucket_id, name) values ('project-documents', $1)";
+  const read = "select name from storage.objects where bucket_id = 'project-documents'";
+  const remove = "delete from storage.objects where bucket_id = 'project-documents' returning name";
+  try {
+    await asUser(db, employee);
+    await db.query(upload, [key]);
+    assert.equal((await db.query(read)).rows.length, 1);
+    assert.equal((await db.query(remove)).rows.length, 0);
+    await asUser(db, otherEmployee);
+    assert.equal((await db.query(read)).rows.length, 0);
+    await assert.rejects(db.query(upload, [`${project}/blocked.pdf`]), /row-level security/);
+    await asUser(db, admin);
+    await db.query('update projects set archived_at = now() where id = $1', [project]);
+    assert.equal((await db.query(read)).rows.length, 1);
+    await assert.rejects(db.query(upload, [`${project}/archived.pdf`]), /row-level security/);
+    await assert.rejects(db.query('delete from projects where id = $1', [project]), /zuerst die Auftragsdokumente/);
+    await asUser(db, employee);
+    assert.equal((await db.query(read)).rows.length, 0);
+    await asUser(db, admin);
+    assert.equal((await db.query(remove)).rows.length, 1);
+    assert.equal((await db.query('delete from projects where id = $1 returning id', [project])).rows.length, 1);
   } finally { await db.close(); }
 });

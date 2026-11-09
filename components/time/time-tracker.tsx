@@ -238,7 +238,7 @@ function TimeEntryList({ entries, clientMap, projectMap, serviceMap, isAdmin, is
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
                           <span className="rounded bg-slate-100 px-2 py-0.5">{client?.name || 'Unbekannter Kunde'}</span>
                           <span>→</span>
-                          <span className="rounded bg-slate-100 px-2 py-0.5">{project?.name || 'Unbekannter Auftrag'}</span>
+                          <span className="rounded bg-slate-100 px-2 py-0.5">{project?.name || 'Auftrag nicht verfügbar'}</span>
                           {service && <><span>→</span><span className="rounded bg-slate-100 px-2 py-0.5">{service.name}</span></>}
                         </div>
                       </div>
@@ -274,7 +274,7 @@ function EntryModal({ onClose, clients, projects, users, currentUser, entry, ini
   const [clientId, setClientId] = useState(entry?.clientId || '');
   const [projectId, setProjectId] = useState(entry?.projectId || '');
   const [date, setDate] = useState(entry?.date || new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState(entry?.startTime || '08:00');
+  const [startTime, setStartTime] = useState(entry?.startTime || '07:00');
   const [endTime, setEndTime] = useState(entry?.endTime || '16:00');
   const [pauseMinutes, setPauseMinutes] = useState(entry ? String(Math.max(0, grossMinutes - entry.durationMinutes)) : '30');
   const [description, setDescription] = useState(entry?.description || '');

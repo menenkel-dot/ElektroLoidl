@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchAllPages } from './pagination';
 import { prepareProjectImageUpload } from './project-image-upload';
+import { removeAllProjectDocuments } from './project-documents';
 
 type DirectoryProfile = {
   id: string;
@@ -215,7 +216,13 @@ export const api = {
   },
 
   deleteProject: async (id: string) => {
-    const { error } = await supabase.from('projects').delete().eq('id', id);
+    const { data: project, error: projectError } = await supabase
+      .from('projects').select('archived_at').eq('id', id).single();
+    if (projectError) throw projectError;
+    if (!project.archived_at) throw new Error('Bitte den Auftrag vor dem endgültigen Löschen archivieren.');
+    await removeAllProjectDocuments(id);
+    const { error } = await supabase.from('projects').delete().eq('id', id)
+      .not('archived_at', 'is', null).select('id').single();
     if (error) throw error;
     return true;
   },

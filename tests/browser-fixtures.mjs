@@ -18,6 +18,7 @@ const adminId = '10000000-0000-0000-0000-000000000001';
 const employeeId = '10000000-0000-0000-0000-000000000002';
 const projectId = '20000000-0000-0000-0000-000000000001';
 const archivedProjectId = '20000000-0000-0000-0000-000000000002';
+const documentKeys = new Map();
 const reportProjects = [
   { id: projectId, name: 'Neubau Musterstraße' },
   { id: archivedProjectId, name: 'Sanierung Altbau' },
@@ -37,6 +38,19 @@ const preview = { token: 'fixture-preview', effective_from: '2026-09-01', before
   absence_changes: [{ id: 'fixture', type: 'comp_time', start_date: '2026-09-04', end_date: '2026-09-04', old_hours: 7.68, new_hours: 5, old_days: 0, new_days: 0 }] };
 function responseData(request) {
   const url = new URL(request.url);
+  if (url.pathname.endsWith('/object/list/project-documents')) {
+    const { prefix, offset, limit } = JSON.parse(request.postData);
+    return [...documentKeys]
+      .filter(([key]) => key.startsWith(`${prefix}/`))
+      .map(([key, id]) => ({ id, name: key.slice(prefix.length + 1) }))
+      .slice(offset, offset + limit);
+  }
+  const documentPath = '/object/project-documents/';
+  if (request.method === 'POST' && url.pathname.includes(documentPath)) {
+    const key = url.pathname.split(documentPath)[1];
+    documentKeys.set(key, crypto.randomUUID());
+    return { Key: key };
+  }
   if (url.pathname.endsWith('/user')) return authUser;
   if (url.pathname.endsWith('/token')) return session;
   if (url.pathname.endsWith('/profiles')) return url.searchParams.has('id') ? profile : role === 'employee' ? [employee] : [admin, employee];

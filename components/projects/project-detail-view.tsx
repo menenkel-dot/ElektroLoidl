@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { exportProjectPdf } from '@/lib/project-pdf';
 import { ProjectTimeSummary } from './project-time-summary';
+import { ProjectDocumentsCard } from './project-documents-card';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown, ChevronDown, ChevronRight, Settings2, Archive, ArchiveRestore } from 'lucide-react';
@@ -75,7 +76,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [selectedImage, setSelectedImage] = useState<ProjectImage | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   
-  const { data: project, isLoading: projectLoading } = useQuery<Project>({ 
+  const { data: project, isLoading: projectLoading, isError: projectFailed } = useQuery<Project>({
     queryKey: ['project', projectId], 
     queryFn: () => api.getProject(projectId) as Promise<Project>
   });
@@ -208,7 +209,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   };
 
   if (projectLoading || currentUserLoading) return <div className="text-slate-500">Lade Auftrag...</div>;
-  if (!project || (project.isArchived && currentUser?.role !== 'admin')) return <div className="text-red-500">Auftrag nicht gefunden oder nicht mehr aktiv.</div>;
+  if (projectFailed || !project || (project.isArchived && currentUser?.role !== 'admin')) return <div className="text-red-500">Auftrag nicht verfügbar.</div>;
 
   const client = clients?.find(c => c.id === project.clientId);
   const isAdmin = currentUser?.role === 'admin';
@@ -749,6 +750,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               )}
             </div>
           </div>
+          <ProjectDocumentsCard projectId={projectId} isArchived={isArchived} isAdmin={isAdmin} />
         </div>
       </div>
 
