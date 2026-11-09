@@ -652,6 +652,20 @@ export const api = {
     }));
   },
   
+  getAbsenceHistory: async (absenceId: string) => {
+    return fetchAllPages<{
+      id: number;
+      action: 'submitted' | 'edited' | 'approved' | 'rejected' | 'reopened';
+      occurred_at: string | null;
+      actor_name: string | null;
+      changes: { type?: [string, string]; period?: [[string, string], [string, string]] } | null;
+    }>((from, to) => supabase.from('absence_history')
+      .select('id, action, occurred_at, actor_name, changes')
+      .eq('absence_id', absenceId)
+      .order('id')
+      .range(from, to));
+  },
+
   addAbsence: async (absence: any) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Nicht authentifiziert");

@@ -16,6 +16,8 @@ function command(method, params = {}) {
 }
 const adminId = '10000000-0000-0000-0000-000000000001';
 const employeeId = '10000000-0000-0000-0000-000000000002';
+const absenceId = '50000000-0000-0000-0000-000000000001';
+const legacyAbsenceId = '50000000-0000-0000-0000-000000000002';
 const projectId = '20000000-0000-0000-0000-000000000001';
 const archivedProjectId = '20000000-0000-0000-0000-000000000002';
 const clientId = '40000000-0000-0000-0000-000000000001';
@@ -57,6 +59,22 @@ function responseData(request) {
   if (url.pathname.endsWith('/token')) return session;
   if (url.pathname.endsWith('/profiles')) return url.searchParams.has('id') ? profile : role === 'employee' ? [employee] : [admin, employee];
   if (url.pathname.endsWith('/get_employee_directory')) return [admin, employee].map(({ id, first_name, last_name, role }) => ({ id, first_name, last_name, role, avatar_url: null }));
+  if (url.pathname.endsWith('/absences')) return [
+    { id: absenceId, user_id: employeeId, type: 'vacation', start_date: '2026-12-10', end_date: '2026-12-11', status: 'approved' },
+    { id: legacyAbsenceId, user_id: employeeId, type: 'sick', start_date: '2026-11-01', end_date: '2026-11-01', status: 'rejected' },
+  ];
+  if (url.pathname.endsWith('/absence_history')) {
+    const legacy = url.searchParams.get('absence_id') === `eq.${legacyAbsenceId}`;
+    return legacy ? [
+      { id: 4, action: 'submitted', occurred_at: '2026-10-27T10:30:00Z', actor_name: null, changes: null },
+      { id: 5, action: 'rejected', occurred_at: null, actor_name: null, changes: null },
+    ] : [
+      { id: 1, action: 'submitted', occurred_at: '2026-11-02T10:30:00Z', actor_name: 'Muster Mitarbeiter', changes: null },
+      { id: 2, action: 'edited', occurred_at: '2026-11-03T10:30:00Z', actor_name: 'Muster Mitarbeiter',
+        changes: { type: ['comp_time', 'vacation'], period: [['2026-12-10', '2026-12-10'], ['2026-12-10', '2026-12-11']] } },
+      { id: 3, action: 'approved', occurred_at: '2026-11-04T10:30:00Z', actor_name: 'Test Admin', changes: null },
+    ];
+  }
   if (url.pathname.endsWith('/project_notes')) return [{ id: 'note-1', project_id: projectId, user_id: adminId, text: 'Dokumentation vom Administrator', created_at: '2026-09-03T10:30:00Z' }];
   if (url.pathname.endsWith('/project_members')) return [{ id: 'member-1', project_id: projectId, user_id: adminId }];
   if (url.pathname.endsWith('/clients')) return [{ id: clientId, name: 'Testkunde' }];

@@ -23,7 +23,7 @@ async function setup(beforeMigration) {
     create table public.time_entries(id uuid primary key default gen_random_uuid(),user_id uuid references public.profiles,
       project_id uuid references public.projects,date date,start_time time,end_time time,duration_minutes integer,description text);
     create table public.absences(id uuid primary key default gen_random_uuid(), user_id uuid references public.profiles,
-      type text,status text,start_date date,end_date date);
+      type text,status text,start_date date,end_date date,created_at timestamptz default now());
     create function private.is_admin() returns boolean language sql stable security definer set search_path='' as $$
       select exists(select 1 from public.profiles where id=auth.uid() and role='admin') $$;
     grant select,update on public.profiles to authenticated;
@@ -51,6 +51,77 @@ async function setup(beforeMigration) {
 }
 
 const scalar = async (db, sql, args = []) => Object.values((await db.query(sql,args)).rows[0])[0];
+
+test('absence history records trusted actors and changes, inherits access and preserves legacy facts', async () => {
+  const db = await setup();
+  const other = '10000000-0000-0000-0000-000000000003';
+  const asUser = async id => {
+    await db.exec('reset role; set role authenticated');
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id]);
+  };
+  const history = async id => (await db.query(
+    'select action, actor_name, occurred_at, changes from absence_history where absence_id=$1 order by id',
+    [id],
+  )).rows;
+  const request = (owner, start) => scalar(db,
+    "insert into absences(user_id,type,status,start_date,end_date) values($1,'sick','pending',$2,$2) returning id",
+    [owner, start],
+  );
+
+  try {
+    const legacy = await scalar(db,
+      "insert into absences(user_id,type,status,start_date,end_date,created_at) values($1,'sick','approved','2026-01-01','2026-01-01','2025-12-01 11:30Z') returning id",
+      [employee],
+    );
+    await db.exec('reset role');
+    await db.query("insert into profiles(id,role,first_name) values($1,'employee','Andere Person')", [other]);
+    await db.exec(await migration('20261109201314_absence_history'));
+
+    await asUser(employee);
+    const legacyEvents = await history(legacy);
+    assert.equal(legacyEvents[0].occurred_at.toISOString(), '2025-12-01T11:30:00.000Z');
+    assert.equal(legacyEvents[0].actor_name, null);
+    assert.deepEqual(legacyEvents[1], { action: 'approved', occurred_at: null, actor_name: null, changes: null });
+
+    const id = await request(employee, '2027-02-01');
+    await db.query("update absences set type='vacation',end_date='2027-02-02' where id=$1", [id]);
+    await db.query("update absences set end_date=end_date where id=$1", [id]);
+    await assert.rejects(db.query("update absences set status='approved' where id=$1", [id]), /row-level security/);
+    await assert.rejects(db.query("insert into absence_history(absence_id,action) values($1,'approved')", [id]), /permission denied/);
+    const edits = await history(id);
+    assert.deepEqual(edits.map(row => [row.action, row.actor_name]), [
+      ['submitted', 'Mitarbeiter'], ['edited', 'Mitarbeiter'],
+    ]);
+    assert.deepEqual(edits[1].changes, {
+      type: ['sick', 'vacation'],
+      period: [['2027-02-01', '2027-02-01'], ['2027-02-01', '2027-02-02']],
+    });
+    assert.ok(edits.every(row => row.occurred_at instanceof Date));
+    await asUser(other);
+    assert.deepEqual(await history(id), []);
+
+    await asUser(admin);
+    const onBehalf = await request(employee, '2027-03-01');
+    await db.query("update absences set status='rejected' where id=$1", [onBehalf]);
+    await db.query("update absences set status='approved' where id=$1", [id]);
+    await db.query("update absences set charge_revision=gen_random_uuid(),charge_recalculate_from='2027-02-01' where id=$1", [id]);
+    await db.query("update profiles set first_name='Neuer Name' where id=$1", [admin]);
+    assert.equal((await history(id)).length, 3);
+    await asUser(employee);
+    const approved = (await history(id))[2];
+    assert.equal(approved.action, 'approved');
+    assert.equal(approved.actor_name, 'Admin');
+    assert.ok(approved.occurred_at instanceof Date);
+    assert.deepEqual((await history(onBehalf)).map(row => [row.action, row.actor_name]), [
+      ['submitted', 'Admin'], ['rejected', 'Admin'],
+    ]);
+    await asUser(admin);
+    await db.query('delete from absences where id=$1', [id]);
+    await db.exec('reset role');
+    assert.deepEqual(await history(id), []);
+  } finally { await db.close(); }
+});
+
 async function convert(db, who = employee, minutes = [510,510,510,510,300,0,0], region = 'BY') {
   const preview = await scalar(db, 'select public.preview_work_model($1,$2,$3)', [who,minutes,region]);
   await scalar(db,'select public.save_work_model($1,$2,$3,$4)',[who,minutes,region,preview.token]);

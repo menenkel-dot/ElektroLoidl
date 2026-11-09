@@ -6,6 +6,7 @@ import { Plus, Calendar, CheckCircle, XCircle, Pencil, Trash2 } from 'lucide-rea
 import { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
+import { AbsenceHistory } from './absence-history';
 
 // Definition der Typen für bessere Typsicherheit
 type AbsenceType = 'vacation' | 'sick' | 'comp_time';
@@ -59,10 +60,11 @@ export function AbsenceView() {
   const updateStatusMutation = useMutation({
     onError: (error: Error) => toast.error(error.message),
     mutationFn: ({ id, status }: { id: string; status: string }) => api.updateAbsenceStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_data, { id }) => {
       toast.success('Status aktualisiert');
       queryClient.invalidateQueries({ queryKey: ['workBalances'] });
       queryClient.invalidateQueries({ queryKey: ['absences'] });
+      queryClient.invalidateQueries({ queryKey: ['absenceHistory', id] });
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },
@@ -70,8 +72,9 @@ export function AbsenceView() {
 
   const deleteMutation = useMutation({
     mutationFn: api.deleteAbsence,
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       toast.success('Abwesenheitsantrag gelöscht');
+      queryClient.removeQueries({ queryKey: ['absenceHistory', id], exact: true });
       queryClient.invalidateQueries({ queryKey: ['workBalances'] });
       queryClient.invalidateQueries({ queryKey: ['absences'] });
       queryClient.invalidateQueries({ queryKey: ['currentUser'] });
@@ -247,6 +250,7 @@ export function AbsenceView() {
                     )}
                   </div>
                 </div>
+                <AbsenceHistory absenceId={absence.id} typeLabels={typeLabels} />
               </li>
             );
           })}
@@ -264,6 +268,9 @@ export function AbsenceView() {
           users={users || []}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['absences'] });
+            if (editingAbsence) {
+              queryClient.invalidateQueries({ queryKey: ['absenceHistory', editingAbsence.id] });
+            }
             setIsModalOpen(false);
           }}
         />
