@@ -5,9 +5,10 @@ import { api } from '@/lib/api';
 import { exportProjectPdf } from '@/lib/project-pdf';
 import { ProjectTimeSummary } from './project-time-summary';
 import { ProjectDocumentsCard } from './project-documents-card';
+import { EntryModal } from '@/components/time/entry-modal';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown, ChevronDown, ChevronRight, Settings2, Archive, ArchiveRestore } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, ImageIcon, Users, Plus, Trash2, UserPlus, Package, Edit2, MapPin, Navigation, Download, Maximize2, X, UserRound, Phone, FileDown, ChevronDown, ChevronRight, Settings2, Archive, ArchiveRestore, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -61,6 +62,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+  const [isTimeEntryOpen, setIsTimeEntryOpen] = useState(false);
   const [isMaterialModalOpen, setIsMaterialModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<ProjectMaterial | null>(null);
@@ -214,6 +216,7 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
   const client = clients?.find(c => c.id === project.clientId);
   const isAdmin = currentUser?.role === 'admin';
   const isArchived = project.isArchived;
+  const canBookTime = Boolean(currentUser && !isArchived && client);
   const clientAddress = client?.address?.trim();
   const contactPerson = client?.contactPerson?.trim();
   const clientPhone = client?.phone?.trim();
@@ -329,6 +332,20 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
               </div>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
+              {currentUser && !isArchived && (
+                <div className="flex flex-col gap-1">
+                  <button type="button" disabled={!canBookTime || (isAdmin && usersLoading)}
+                    onClick={() => setIsTimeEntryOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    <Clock className="h-4 w-4" /> Zeit erfassen
+                  </button>
+                  {!clientsLoading && !client && (
+                    <p className="text-xs text-slate-500">
+                      {project.clientId ? 'Der verknüpfte Kunde ist nicht verfügbar.' : 'Dem Auftrag ist kein Kunde zugeordnet.'}
+                    </p>
+                  )}
+                </div>
+              )}
               {isAdmin && (isArchived ? (
                 <button
                   type="button"
@@ -753,6 +770,16 @@ export function ProjectDetailView({ projectId }: { projectId: string }) {
           <ProjectDocumentsCard projectId={projectId} isArchived={isArchived} isAdmin={isAdmin} />
         </div>
       </div>
+
+      {isTimeEntryOpen && canBookTime && client && (
+        <EntryModal
+          key={project.id}
+          onClose={() => setIsTimeEntryOpen(false)}
+          users={allUsers || []}
+          currentUser={currentUser}
+          fixedProject={{ id: project.id, name: project.name, clientId: client.id, clientName: client.name }}
+        />
+      )}
 
       {!isArchived && isMemberModalOpen && (
         <MemberModal 

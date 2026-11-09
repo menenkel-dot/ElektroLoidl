@@ -18,7 +18,9 @@ const adminId = '10000000-0000-0000-0000-000000000001';
 const employeeId = '10000000-0000-0000-0000-000000000002';
 const projectId = '20000000-0000-0000-0000-000000000001';
 const archivedProjectId = '20000000-0000-0000-0000-000000000002';
+const clientId = '40000000-0000-0000-0000-000000000001';
 const documentKeys = new Map();
+const newTimeEntries = [];
 const reportProjects = [
   { id: projectId, name: 'Neubau Musterstraße' },
   { id: archivedProjectId, name: 'Sanierung Altbau' },
@@ -57,7 +59,22 @@ function responseData(request) {
   if (url.pathname.endsWith('/get_employee_directory')) return [admin, employee].map(({ id, first_name, last_name, role }) => ({ id, first_name, last_name, role, avatar_url: null }));
   if (url.pathname.endsWith('/project_notes')) return [{ id: 'note-1', project_id: projectId, user_id: adminId, text: 'Dokumentation vom Administrator', created_at: '2026-09-03T10:30:00Z' }];
   if (url.pathname.endsWith('/project_members')) return [{ id: 'member-1', project_id: projectId, user_id: adminId }];
-  if (url.pathname.endsWith('/time_entries')) return reportProjects.map((project, index) => ({
+  if (url.pathname.endsWith('/clients')) return [{ id: clientId, name: 'Testkunde' }];
+  if (url.pathname.endsWith('/time_entries') && request.method === 'POST') {
+    const [entry] = JSON.parse(request.postData);
+    const saved = { ...entry, id: crypto.randomUUID() };
+    newTimeEntries.push(saved);
+    return saved;
+  }
+  if (url.pathname.endsWith('/time_entries') && url.searchParams.get('select') === 'id') {
+    return newTimeEntries.filter(entry =>
+      `eq.${entry.user_id}` === url.searchParams.get('user_id')
+      && `eq.${entry.date}` === url.searchParams.get('date')
+      && entry.start_time < url.searchParams.get('start_time').slice(3)
+      && entry.end_time > url.searchParams.get('end_time').slice(3),
+    ).slice(0, 1).map(({ id }) => ({ id }));
+  }
+  if (url.pathname.endsWith('/time_entries')) return [...newTimeEntries, ...reportProjects.map((project, index) => ({
     id: `30000000-0000-0000-0000-${String(index + 1).padStart(12, '0')}`,
     user_id: index % 2 ? employeeId : adminId,
     project_id: project.id,
@@ -66,21 +83,37 @@ function responseData(request) {
     end_time: '12:00:00',
     duration_minutes: 240,
     description: 'Testbuchung für die Berichtsansicht',
-  }));
+  }))].filter(entry => role !== 'employee' || entry.user_id === employeeId);
   if (url.pathname.endsWith('/projects')) {
     const projects = reportProjects.map(project => ({
       ...project,
-      client_id: null,
+      client_id: project.id === projectId || project.id === archivedProjectId ? clientId : null,
       archived_at: project.id === archivedProjectId ? '2026-09-05T12:00:00Z' : null,
       archived_by: project.id === archivedProjectId ? adminId : null,
     }));
-    if (!url.searchParams.has('id')) return projects;
-    return url.searchParams.get('id')?.includes(archivedProjectId) ? projects[1] : projects[0];
+    const visible = role === 'employee' ? projects.filter(project => project.id === projectId) : projects;
+    if (!url.searchParams.has('id')) return visible;
+    return visible.find(project => `eq.${project.id}` === url.searchParams.get('id')) ?? null;
   }
   if (url.pathname.endsWith('/work_time_models')) return [admin,employee].map(p => ({user_id:p.id,effective_from:'2026-09-01',daily_minutes:null,monthly_hours:p.target_hours_monthly,holiday_profile:null}));
   if (url.pathname.endsWith('/get_work_balances')) return role === 'employee' ? [balance] : [balance, { ...balance, user_id: adminId, balance_hours: 20 }];
   if (url.pathname.endsWith('/get_recent_project_notes')) return [1,2,3].map(i=>({id:`note-${i}`,project_id:projectId,project_name:'Neubau Musterstraße',author_name:'Muster Mitarbeiter',created_at:'2026-09-03T10:30:00Z',text:`Notiz ${i}: Leitungen im Erdgeschoss fertig verlegt. Material geprüft. `+'Weitere Details zur Installation. '.repeat(10)}));
-  if (url.pathname.endsWith('/get_project_time_summary')) return {total_minutes:810,count:3,members:[{user_id:employeeId,name:'Muster Mitarbeiter',minutes:810}],entries:[1,2,3].map(i=>({id:`entry-${i}`,name:'Muster Mitarbeiter',date:'2026-09-03',start_time:'08:00:00',end_time:'12:30:00',duration_minutes:270,description:'Elektroinstallation Erdgeschoss und Prüfung der Leitungen'}))};
+  if (url.pathname.endsWith('/get_project_time_summary')) {
+    const recorded = newTimeEntries.filter(entry => entry.project_id === projectId);
+    const entries = recorded.map(entry => ({
+      ...entry, name: entry.user_id === employeeId ? 'Muster Mitarbeiter' : 'Test Admin',
+    }));
+    return {
+      total_minutes: 810 + recorded.reduce((total, entry) => total + entry.duration_minutes, 0),
+      count: 3 + recorded.length,
+      members: [{ user_id: employeeId, name: 'Muster Mitarbeiter', minutes: 810 }],
+      entries: [...entries, ...[1, 2, 3].map(i => ({
+        id: `entry-${i}`, name: 'Muster Mitarbeiter', date: '2026-09-03',
+        start_time: '08:00:00', end_time: '12:30:00', duration_minutes: 270,
+        description: 'Elektroinstallation Erdgeschoss und Prüfung der Leitungen',
+      }))],
+    };
+  }
   if (url.pathname.endsWith('/preview_work_model') || url.pathname.endsWith('/save_work_model')) return preview;
   return [];
 }
@@ -99,8 +132,10 @@ ws.addEventListener('message', async event => {
   if (message.id) { const call=pending.get(message.id); pending.delete(message.id); if(message.error) call?.reject(new Error(message.error.message)); else call?.resolve(message.result); }
   if (message.method === 'Fetch.requestPaused') {
     const {requestId,request} = message.params;
-    const body = request.method === 'OPTIONS' ? '' : JSON.stringify(response(request));
-    await command('Fetch.fulfillRequest', {requestId,responseCode:200,responseHeaders:[{name:'Content-Type',value:'application/json'},{name:'Access-Control-Allow-Origin',value:'*'},{name:'Access-Control-Allow-Headers',value:'*'},{name:'Access-Control-Allow-Methods',value:'GET,POST,PATCH,DELETE,OPTIONS'}],body:Buffer.from(body).toString('base64')});
+    const result = request.method === 'OPTIONS' ? undefined : response(request);
+    const responseCode = result === null ? 406 : 200;
+    const body = request.method === 'OPTIONS' ? '' : JSON.stringify(result ?? { code: 'PGRST116', message: 'No rows' });
+    await command('Fetch.fulfillRequest', {requestId,responseCode,responseHeaders:[{name:'Content-Type',value:'application/json'},{name:'Access-Control-Allow-Origin',value:'*'},{name:'Access-Control-Allow-Headers',value:'*'},{name:'Access-Control-Allow-Methods',value:'GET,POST,PATCH,DELETE,OPTIONS'}],body:Buffer.from(body).toString('base64')});
   }
 });
 await command('Network.enable');
