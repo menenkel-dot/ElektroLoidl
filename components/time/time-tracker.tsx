@@ -295,8 +295,15 @@ function EntryModal({ onClose, clients, projects, users, currentUser, entry, ini
     }
   });
 
-  const availableProjects = projects.filter((p: any) =>
-    p.clientId === clientId && (!p.isArchived || p.id === entry?.projectId),
+  const bookableProjects = projects.filter((project: ProjectRecord) =>
+    !project.isArchived || (isAdmin && project.id === entry?.projectId),
+  );
+  const bookableClientIds = new Set(bookableProjects.map((project: ProjectRecord) => project.clientId));
+  const availableClients = isAdmin
+    ? clients
+    : clients.filter((client: ClientRecord) => bookableClientIds.has(client.id));
+  const availableProjects = bookableProjects.filter((project: ProjectRecord) =>
+    project.clientId === clientId,
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -372,7 +379,7 @@ function EntryModal({ onClose, clients, projects, users, currentUser, entry, ini
                   <label className="block text-sm font-medium text-gray-700 mb-1">Kunde</label>
                   <select required value={clientId} onChange={e => { setClientId(e.target.value); setProjectId(''); }} className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm py-2 px-3 border bg-white">
                     <option value="">Bitte wählen...</option>
-                    {clients.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {availableClients.map((client: ClientRecord) => <option key={client.id} value={client.id}>{client.name}</option>)}
                   </select>
                 </div>
                 <div>
